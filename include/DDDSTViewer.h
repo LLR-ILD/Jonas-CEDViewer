@@ -1,5 +1,5 @@
-#ifndef VIEWERAR_H
-#define VIEWERAR_H 1
+#ifndef DD_DST_VIEWER_H
+#define DD_DST_VIEWER_H
 
 #include "marlin/Processor.h"
 #include "EVENT/MCParticle.h"
@@ -11,39 +11,39 @@ using namespace lcio ;
 using namespace marlin ;
 
 
-/** DSTViewer <br>
+/** DDDSTViewer <br>
  *  This processor displays .... <br>
  *  @param ParticleCollection : name of reconstructed Particle collection to be displayed <br>
      .....
  *  <br>
  *  @authors Szymon Daraszewicz (DESY/UOE)
- *  @version $Id$ 
+ *  @version $Id$
  */
-class DSTViewer : public Processor {
-  
+class DDDSTViewer : public Processor {
+
  public:
-  
-  virtual Processor*  newProcessor() { return new DSTViewer ; }
-  
-  DSTViewer() ;
-  
+
+  virtual Processor*  newProcessor() { return new DDDSTViewer ; }
+
+  DDDSTViewer() ;
+
   virtual void init() ;
-  
+
   virtual void processRunHeader( LCRunHeader* run ) ;
-  
-  virtual void processEvent( LCEvent * evt ) ; 
-  
-  virtual void check( LCEvent * evt ) ; 
-  
+
+  virtual void processEvent( LCEvent * evt ) ;
+
+  virtual void check( LCEvent * evt ) ;
+
   virtual void end() ;
 
-  
+
  protected:
 
   int _nRun ;
   int _nEvt ;
   // bool dispHelix;
-  
+
 //  std::vector<std::string> _caloHitCollections;
 //  std::vector<std::string> _simCaloHitCollections;
 //  std::vector<std::string> _trackerHitCollections;
@@ -53,8 +53,8 @@ class DSTViewer : public Processor {
 //  std::string _clustersCollection;
 //  std::string _tracksCollection;
   std::string _particleCollection;
-  
-  StringVec _jetCollections;
+
+  StringVec jet_col_names_;
 
   int _layerCaloHit;
   int _layerSimCaloHit;
@@ -67,25 +67,25 @@ class DSTViewer : public Processor {
   int _layerMCP;
   int _layerBosons;
   int _layerReco;
-  
+
 
   int _detModel;
 
   int _waitForKeyboard;
 
   std::map<MCParticle *, int > _mcpList;
-  
+
   int returnTrackColor(int type);
-  
+
   /**
    * @author: S.Daraszewicz (UoE)
    * @date: 21.08.08
-   * 
+   *
    * @param eneCluster : Energy of the cluster
    * @param cutoff_min : Min cut for the cluster energy
    * @param cutoff_max : Max cut for the cluster energy
-   * 
-   * Returns the colour for the visualisation of a cluster (in log scale). Colours run from red (0x660000) to blue (0x6600FF) 
+   *
+   * Returns the colour for the visualization of a cluster (in log scale). Colours run from red (0x660000) to blue (0x6600FF)
    * for high and low energy particles respectively.
    */
   int returnClusterColor(float eneCluster, float cutoff_min, float cutoff_max);
@@ -93,39 +93,40 @@ class DSTViewer : public Processor {
   /**
    * @author: S.Daraszewicz (UoE)
    * @date: 22.08.08
-   * 
+   *
    * @param eneCluster : Energy of the cluster
    * @param cutoff_min : Min cut for the cluster energy
    * @param cutoff_max : Max cut for the cluster energy
    * @param color_steps: Number of colours to be used in the scale
    * @param scale	   : Linear or Logarithmic colour scale
    * @param colorMap   : Color map type to be used
-   * 
+   *
    * Returns the size for the visualisation of a cluster (in log scale) within user defined sizes.
    */
-   
+
     void showLegendSpectrum(const unsigned int color_steps, char scale, int colorMap, float ene_min, float ene_max, unsigned int ticks);
 
   	int returnRGBClusterColor(float eneCluster, float cutoff_min, float cutoff_max, int color_steps, char scale, int colorMap);
 
   	int returnClusterSize(float eneCluster, float cutoff_min, float cutoff_max);
-    
+
   	int returnTrackSize(float type);
-  	
+
   	int returnJetLayer(std::string jetColName);
-  	
+
   	int returnIpLayer(std::string jetColName);
-  	
+
   	int returnJetColor(std::string jetColName, int colNumber);
-  	
+
   	int addAlphaChannelToColor(int color, int alphaChannel);
-  	
+
   	float * returnConeColor(std::string jetColName);
 
   	float _bField;
-    
-    void writeLayerDescription(void);
+    float _e_min_draw;
+    std::string _mc_collection;
 
+    void writeLayerDescription(void);
 } ;
 
 #endif
