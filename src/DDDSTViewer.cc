@@ -1,11 +1,6 @@
 /**
- *  Event display for DST files.
- *
- *  Advanced functionality over the original DDDSTViewer.
- *  Amongst others, the detector geometry is ported to DD4hep.
- *
  *    @author: Szymon Daraszewicz, DESY summerstudent (original).
- *    @author:  iLCSoft/CEDViewer author list (DDDSTViewer).
+ *    @author:  iLCSoft/CEDViewer author list (DSTViewer).
  *    @author Jonas Kunath, LLR, CNRS, École Polytechnique, IPP.
  **/
 // TODO: Clean up includes.
@@ -83,225 +78,136 @@ void DDDSTViewer::writeLayerDescription(void){
 }
 
 DDDSTViewer::DDDSTViewer() : Processor("DDDSTViewer") {
-  _description = "CED based event display for DST files";
+  _description = "CED based event display for DST files with dd4hep geometry.";
 
-  registerInputCollection( LCIO::RECONSTRUCTEDPARTICLE,
-			   "ParticleCollection" ,
-			   "Name of the particle collection" ,
-			   _particleCollection ,
-			   std::string("RecoParticles"));
+  registerInputCollection(
+    LCIO::RECONSTRUCTEDPARTICLE,
+    "ParticleCollection",
+    "Name of the particle collection.",
+    rp_col_name_,
+    std::string("RecoParticles"));
 
-  StringVec  jet_col_names;// typedef std::vector< std::string > StringVec ;
-  // jet_col_names.push_back( "Durham_2Jets" ) ;
-  // jet_col_names.push_back( "Durham_3Jets" ) ;
-  // jet_col_names.push_back( "Durham_4Jets" ) ;
-  // jet_col_names.push_back( "Durham_5Jets" ) ;
-  // jet_col_names.push_back( "Durham_6Jets" ) ;
+  registerInputCollection(
+    LCIO::MCPARTICLE,
+   "MCCollection" ,
+   "Name of the Monte Carlo particle collection (if it should be drawn)" ,
+   mc_col_name_ ,
+   std::string("MCParticlesSkimmed"));
 
-  registerInputCollections( LCIO::RECONSTRUCTEDPARTICLE,
-			    "JetCollections" ,
-			    "Names of the jet collections" ,
-			    jet_col_names_,
-			    jet_col_names);
+  StringVec  default_jet_col_names{
+    "Durham_2Jets",
+    "Durham_3Jets"
+    "Durham_4Jets"
+    "Durham_5Jets"
+    "Durham_6Jets"
+  };
+  registerInputCollections(
+    LCIO::RECONSTRUCTEDPARTICLE,
+    "JetCollections" ,
+    "Names of the jet collections." ,
+    jet_col_names_,
+    default_jet_col_names);
 
-  registerProcessorParameter("MagneticField",
-			     "Magnetic Field",
-			     _bField,
-			     (float)3.5);
+  registerProcessorParameter(
+    "WaitForKeyboard",
+    "Wait for Keyboard before proceed.",
+    wait_for_keyboard_,
+    1);
 
-  registerProcessorParameter("WaitForKeyboard",
-			     "Wait for Keyboard before proceed",
-			     _waitForKeyboard,
-			     (int)1);
-
-  registerProcessorParameter("LayerReco",
-			     "Layer for Reco Particles",
-			     _layerReco,
-			     (int)9);
-
-  registerProcessorParameter( "DrawDetectorID" ,
-			      "draw detector from GEAR file with given ID (see MarlinCED::newEvent() ) : 0 ILD, -1 none",
-			      _detModel ,
-			      0 ) ;
-
-  registerProcessorParameter("MinEDraw",
-			     "Minimum energy required to draw the RP",
-			     _e_min_draw,
-			     (float)0.0);
-
-  registerInputCollection( LCIO::MCPARTICLE,
-			   "MCCollection" ,
-			   "MC Particle Collection Name" ,
-			   _mc_collection ,
-			   std::string("MCParticlesSkimmed"));
+  registerProcessorParameter(
+    "EDrawCut",
+    "Energy threshold to divide between low and high energy drawing.",
+    e_draw_cut_,
+    0.0f);
 }
 
-/**
- * DDDSTViewer initialise */
 void DDDSTViewer::init() {
-
-  _nRun = -1;
-  _nEvt = 0;
-
   DDMarlinCED::init(this);
-
-  // usually a good idea to
-  printParameters() ;
+  printParameters();
 }
 
-
-/**
- * Process run header (?) */
 void DDDSTViewer::processRunHeader( LCRunHeader* run) {
-  _nRun++ ;
-  _nEvt = 0;
+  n_run_ = run->getRunNumber();
 }
 
-
-/**
- * Main function processEvent */
-void DDDSTViewer::processEvent( LCEvent * evt ) {
-  //DDDSTViewer::writeLayerDescription();
-   // this defines the number of layers (?)
-  int marker = 9;
-
-  streamlog_out(MESSAGE)  << std::endl
-			  << " (+++ This is the DDDSTViewer +++) " << std::endl
-			  << "  DDDSTViewer  : event number "      << _nEvt << std::endl
-			  << std::endl;
-
-  _mcpList.clear();
-
-  //// Gets the GEAR global geometry params
-  ////const gear::TPCParameters& gearTPC = Global::GEAR->getTPCParameters() ;
-  ////const gear::PadRowLayout2D& padLayout = gearTPC.getPadLayout() ;
-
-  DDMarlinCED::newEvent(this) ;
-  ////MarlinCED::newEvent( this, _detModel ) ;
-
+void DDDSTViewer::processEvent(LCEvent* event) {
+  n_event_ = event->getEventNumber();
+  streamlog_out(DEBUG) << "Processing event no " << n_event_
+    << " - run " << n_run_ << std::endl;
+  DDMarlinCED::newEvent(this);
+  DDDSTViewer::writeLayerDescription();
   // Get the detector instance (now dd4hep, replaced gear).
   dd4hep::Detector& the_detector = dd4hep::Detector::getInstance();
-
   // For now, we opt to draw the geometry as simplified structures instead of
   // individual surfaces. The list of detector names to draw in more detail is
   // empty.
   DDMarlinCED::drawDD4hepDetector(the_detector, false, StringVec{});
-
-  DDCEDPickingHandler &pHandler=DDCEDPickingHandler::getInstance();
-  pHandler.update(evt);
-
-
-  //Draw the helix of charged tracks (other than muons) only in the TPC within
-  // the tracker volume.
-  ////double helix_max_r = viewer_util::getTrackerExtent(the_detector)[0];
-  ////double helix_max_z = viewer_util::getTrackerExtent(the_detector)[1];
-  // TODO: take from detector.
-  double helix_max_r = 2000;
-  double helix_max_z = 2500;
-  /** Drawing Reconstructed Particles */
+  DDCEDPickingHandler &p_handler = DDCEDPickingHandler::getInstance();
+  p_handler.update(event);
+// Drawing the reconstructed particles.
+  streamlog_out(DEBUG) << "Drawing RPs from collection: "
+      << rp_col_name_ << std::endl ;
+  EVENT::LCCollection* rp_col = nullptr;
   try {
-    LCCollection * col = evt->getCollection(_particleCollection.c_str());
-    int nelem = col->getNumberOfElements();
-
-    /** Total E, p, q values for the event */
-    float TotEn = 0.0;
-    float TotPX = 0.0;
-    float TotPY = 0.0;
-    float TotPZ = 0.0;
-    float TotCharge = 0.0;
-    ////float bField = Global::GEAR->getBField().at(  gear::Vector3D(0,0,0)  ).z() ;
-    double* bFieldVector = new double[3];
-    the_detector.field().combinedMagnetic(dd4hep::Position(0,0,0), bFieldVector) ;
-    double bField = bFieldVector[2] / dd4hep::tesla;
-    delete[] bFieldVector;
-
-    float ene_min = 0.0;
-    float ene_max = 100.0;
-    for (int ip(0); ip < nelem; ++ip) {
-      ////continue; // TODO back to normal
-      ReconstructedParticle * part = dynamic_cast<ReconstructedParticle*>(col->getElementAt(ip));
-
-      //TrackVec trackVec = part->getTracks();
-      //int nTracks =  (int)trackVec.size();
-      // this is needed for Calorimeter Hits display
-      ClusterVec clusterVec = part->getClusters();
-      int nClusters = (int)clusterVec.size();
-
-      /** get particle properties */
-      float ene = (float) part->getEnergy();
-      float px  = (float)(part->getMomentum()[0]);
-      float py  = (float)(part->getMomentum()[1]);
-      float pz  = (float)(part->getMomentum()[2]);
-      const double * pm = part->getMomentum();
-      gear::Vector3D pp( pm[0], pm[1] , pm[2] ) ;
-      float ptot = pp.r();
-      float charge = (float)part->getCharge();
-      int type = (int)part->getType();
-
-
-      int kMomLayer = kMomLayer;
+    rp_col = event->getCollection(rp_col_name_);
+  } catch (DataNotAvailableException &e) {
+    streamlog_out(ERROR) << "RP collection " << rp_col_name_
+      << " is not available!" << std::endl;
+  }
+  if (rp_col) {
+    // Draw the helix of charged tracks (other than muons) only in the TPC
+    // within the tracker volume.
+    double helix_max_r = viewer_util::getTrackerExtent(the_detector)[0];
+    double helix_max_z = viewer_util::getTrackerExtent(the_detector)[1];
+    viewer_util::AnyParticle ev_sum;
+    // Obtain the detector's B-field for the per-event helix calculation.
+    double* b_vector = new double[3];
+    the_detector.field().combinedMagnetic(dd4hep::Position(0,0,0), b_vector);
+    double b_field_z = b_vector[2] / dd4hep::tesla;
+    delete[] b_vector;
+    // Define the scale for object color and size.
+    double en_min = 0.0, en_max = 100.0;  // Clusters,
+    double ptot_min = 0.0, ptot_max = 25.0;  // Tracks.
+    for (int i=0; i < rp_col->getNumberOfElements(); ++i) {
+      EVENT::ReconstructedParticle* rp =
+        static_cast<EVENT::ReconstructedParticle*>(rp_col->getElementAt(i));
+      // Conveniently store the necessary particle information in a struct.
+      viewer_util::AnyParticle ap(rp);
+      ev_sum += ap;
+      // Reference point of the particle. So far, only origin is implemented.
+      std::vector<double> ref_pt = {0, 0, 0};
+      // Define the layers the rp's components are printed to (E-dependent).
+      int mom_layer = kMomentum;
       int tpc_layer = kTPC;
       int hit_layer = kHit;
       int clu_layer = kCluster;
-      if (ene < _e_min_draw) {
-        kMomLayer = kMomBelowECut;
+      if (ap.E < e_draw_cut_) {
+        mom_layer = kMomBelowECut;
         tpc_layer = kTPCBelowECut;
         hit_layer = kHitBelowECut;
         clu_layer = kClusterBelowECut;
       }
-      //Vertex *startVert = part->getStartVertex();
-      //float ver_x = (float) startVert->getPosition()[0];
-      //std::cout << "start vertex x = " << startVertx << std::endl;
-
-      // start point
-      float refx = 0.0;
-      float refy = 0.0;
-      float refz = 0.0;
-
-      TotEn += ene;
-      TotPX += px;
-      TotPY += py;
-      TotPZ += pz;
-      TotCharge += charge;
-
-      streamlog_out( DEBUG3 )	<< "Particle : " << ip
-				<< " Type : " << type
-				<< " PX = " << px
-				<< " PY = " << py
-				<< " PZ = " << pz
-				<< " P_tot = " << ptot
-				<< " Charge = " << charge
-				<< " E  = " << ene << std::endl;
-
-      ////int ml = marker | ( TPC_LAYER<<CED_LAYER_SHIFT) ; // this defines the default layer 1
-      ////if (type == 22){
-      ////  ml = marker | (ECAL_LAYER<<CED_LAYER_SHIFT); // photons on layer 2
-      ////}
-      ////if (type ==2112){
-      ////  ml = marker | (NEUTRON_LAYER<<CED_LAYER_SHIFT); //neutrons on layer 3
-      ////}
-
+      int type = rp->getType();
       int color = returnTrackColor(type);
-      int size = returnTrackSize(type);
+      int track_size = 1;
 
-      DDMarlinCED::drawHelix(bField, charge, refx, refy, refz, px, py, pz, tpc_layer,
-          size, color, 0.0, helix_max_r, helix_max_z, part->id() );
+      DDMarlinCED::drawHelix(b_field_z, ap.charge, ref_pt[0], ref_pt[1], ref_pt[2], ap.x, ap.y, ap.z, tpc_layer,
+          track_size, color, 0.0, helix_max_r, helix_max_z, rp->id() );
 
       //				/** Draw momentum lines from the ip */
       char Mscale = 'b'; // 'b': linear, 'a': log
       int McolorMap = 2; //hot: 3
       int McolorSteps = 256;
-      //float p = sqrt(px*px+py*py+pz*pz);
-      float ptot_min = 0.0;
-      float ptot_max = 25.0;
-      int Mcolor = returnRGBClusterColor(ptot, ptot_min, ptot_max, McolorSteps, Mscale, McolorMap);
+      int Mcolor = returnRGBClusterColor(ap.getP(), ptot_min, ptot_max, McolorSteps, Mscale, McolorMap);
       int LineSize = 1;
       float momScale = 100;
-      ced_line_ID(refx, refy, refz, momScale*px, momScale*py, momScale*pz, kMomLayer, LineSize, Mcolor, part->id()); //the right id?
+      ced_line_ID(ref_pt[0], ref_pt[1], ref_pt[2], momScale*ap.x, momScale*ap.y, momScale*ap.z, mom_layer, LineSize, Mcolor, rp->id()); //the right id?
 
 
 
 
+      ClusterVec clusterVec = rp->getClusters();
+      int nClusters = (int)clusterVec.size();
       if (nClusters > 0 ) {
 	// std::cout 	<< "nCluster > 0" << std::endl;
 	// std::cout 	<<  clusterVec.size() <<std::endl;
@@ -329,9 +235,9 @@ void DDDSTViewer::processEvent( LCEvent * evt ) {
 
 	float eneCluster = cluster->getEnergy();
 
-	double rotate[] = {0.0, 0.0, 0.0};
+  double rotate[] = {0.0, 0.0, 0.0};
 	// for particles centered at the origin
-	if (refx==0 && refy==0 && refz==0){
+	if (ref_pt == std::vector<double>{0, 0, 0}){
 	  rotate[0] = 0.0;
 	  rotate[1] = theta*180/M_PI;
 	  rotate[2] = phi*180/M_PI;
@@ -344,14 +250,14 @@ void DDDSTViewer::processEvent( LCEvent * evt ) {
 
 	double sizes[] = {100.0, 100.0, 100.0};
 	int scale_z = 4;
-	sizes[0] = returnClusterSize(eneCluster, ene_min, ene_max);
+	sizes[0] = returnClusterSize(eneCluster, en_min, en_max);
 	sizes[1] = sizes[0];
-	sizes[2] = scale_z*returnClusterSize(eneCluster, ene_min, ene_max);
+	sizes[2] = scale_z*returnClusterSize(eneCluster, en_min, en_max);
 
 	char scale = 'a'; // 'b': linear, 'a': log
 	int colorMap = 3; //jet: 3
 	int colorSteps = 256;
-	int color = returnRGBClusterColor(eneCluster, ene_min, ene_max, colorSteps, scale, colorMap);
+	int color = returnRGBClusterColor(eneCluster, en_min, en_max, colorSteps, scale, colorMap);
 
 	//	int hit_type = 1 | HIT_LAYER;
 
@@ -407,11 +313,30 @@ void DDDSTViewer::processEvent( LCEvent * evt ) {
     }
 
 
+    char scale = 'a'; // 'b': linear, 'a': log
+    int colorMap = 3; //jet: 3
+    unsigned int colorSteps = 256;
+    unsigned int ticks = 6; //middle
+    DDDSTViewer::showLegendSpectrum(colorSteps, scale, colorMap, en_min, en_max, ticks);
+
+    streamlog_out( MESSAGE ) << std::endl
+			     << "Total Energy and Momentum Balance of Event" << std::endl
+			     << "Energy = " << ev_sum.E
+			     << " PX = " << ev_sum.x
+			     << " PY = " << ev_sum.y
+			     << " PZ = " << ev_sum.z
+			     << " Charge = " << ev_sum.charge << std::endl
+			     << std::endl ;
+
+    streamlog_out( DEBUG2 ) << "Setup properties" << std::endl
+			    << "B_Field = " << b_field_z << " T" << std::endl ;
+  }
+
 // Now we draw the jets (if any ).
   for (size_t i = 0; i < jet_col_names_.size(); ++i) {
     streamlog_out(DEBUG) << " drawing jets from collection "
       << jet_col_names_[i] << std::endl;
-    LCCollection* col = evt->getCollection( jet_col_names_[i] );
+    LCCollection* col = event->getCollection( jet_col_names_[i] );
     int nelem = col->getNumberOfElements();
     for (int j=0; j < nelem; ++j) {
       ReconstructedParticle * jet = dynamic_cast<ReconstructedParticle*>( col->getElementAt(j) );
@@ -431,14 +356,11 @@ void DDDSTViewer::processEvent( LCEvent * evt ) {
         layer = returnJetLayer(jet_col_names_[i]);
         int color = returnJetColor(jet_col_names_[i], j);
         int LineSize = 1;
-        // start point
-        float refx = 0.0;
-        float refy = 0.0;
-        float refz = 0.0;
+        // Reference point of the particle. So far, only origin is implemented.
+        std::vector<double> ref_pt = {0, 0, 0};
         float momScale = 100;
-        int layerIp = returnIpLayer(jet_col_names_[i]);
-        //ced_line(refx, refy, refz, momScale*pm[0], momScale*pm[1], momScale*pm[2], layerIp, LineSize, color);
-        ced_line_ID(refx, refy, refz, momScale*pm[0], momScale*pm[1], momScale*pm[2], layerIp, LineSize, color, pv[k]->id()); //hauke
+        int layerIp = returnIpLayer(jet_col_names_[i]);;
+        ced_line_ID(ref_pt[0], ref_pt[1], ref_pt[2], momScale*pm[0], momScale*pm[1], momScale*pm[2], layerIp, LineSize, color, pv[k]->id()); //hauke
       }
       double center_c[3] = {0., 0., 0. };
       double rotation_c[3] = { 0.,  v.theta()*180./M_PI , v.phi()*180./M_PI };
@@ -465,17 +387,16 @@ void DDDSTViewer::processEvent( LCEvent * evt ) {
 
 // My MC Particle addition:
 // Adapted from the Jet loop above.
-  streamlog_out(DEBUG) << " drawing MC from collection " << _mc_collection << std::endl ;
+  streamlog_out(DEBUG) << " drawing MC from collection " << mc_col_name_ << std::endl ;
   EVENT::LCCollection* mc_col = nullptr;
   try {
-    mc_col = evt->getCollection(_mc_collection);
+    mc_col = event->getCollection(mc_col_name_);
   } catch (DataNotAvailableException &e) {
-    streamlog_out(ERROR) << "MC collection " << _mc_collection
+    streamlog_out(ERROR) << "MC collection " << mc_col_name_
       << " is not available!" << std::endl;
   }
-  if(col) {
-    int nelem = col->getNumberOfElements();
-    for (int j=0; j < nelem; ++j) {
+  if (mc_col) {
+    for (int j=0; j < mc_col->getNumberOfElements(); ++j) {
       EVENT::MCParticle * mcp = dynamic_cast<EVENT::MCParticle*>(mc_col->getElementAt(j) );
       // Only display the some of the MC particles. Also, define colors depending on the PDG.
       int i_col = 0;
@@ -531,45 +452,12 @@ void DDDSTViewer::processEvent( LCEvent * evt ) {
           0, mc_layer, 2, color, mcp->id());
       // Draw a cone.
       ced_cone_r_ID( min_pt + scale_pt*pt_norm , scale_mom*v.r() , center_c, rotation_c, mc_layer, rgba_color,mcp->id()); //hauke
+    }
   }
-} // End of my MC Particle addition.
-
-
-    char scale = 'a'; // 'b': linear, 'a': log
-    int colorMap = 3; //jet: 3
-    unsigned int colorSteps = 256;
-    unsigned int ticks = 6; //middle
-    DDDSTViewer::showLegendSpectrum(colorSteps, scale, colorMap, ene_min, ene_max, ticks);
-
-    streamlog_out( MESSAGE ) << std::endl
-			     << "Total Energy and Momentum Balance of Event" << std::endl
-			     << "Energy = " << TotEn
-			     << " PX = " << TotPX
-			     << " PY = " << TotPY
-			     << " PZ = " << TotPZ
-			     << " Charge = " << TotCharge << std::endl
-			     << std::endl ;
-
-    streamlog_out( DEBUG2 ) << "Setup properties" << std::endl
-			    << "B_Field = " << bField << " T" << std::endl ;
-
-  }
-  catch( DataNotAvailableException &e){
-
-    streamlog_out( DEBUG4 ) << "  data not available : " << e.what() << std::endl ;
-  }
-
-  DDDSTViewer::writeLayerDescription();
-  /*
-   * This refreshes the view? ...
-   */
-  DDMarlinCED::draw(this, _waitForKeyboard );
-  _nEvt++;
+  // This refreshes the view?
+  DDMarlinCED::draw(this, wait_for_keyboard_);
 }
 
-void DDDSTViewer::check( LCEvent * evt ) { }
-
-void DDDSTViewer::end(){ }
 
 /**
  * PRELIM */
@@ -590,62 +478,7 @@ int DDDSTViewer::returnTrackColor(int type) {
   return kcol;
 }
 
-
-int DDDSTViewer::returnClusterColor(float eneCluster, float cutoff_min, float cutoff_max){
-
-  /**
-   * Check the input values for sanity */
-  if (cutoff_min > cutoff_max) {
-    std::cout << "Error in 'DDDSTViewer::returnClusterColor': cutoff_min < cutoff_max" << std::endl;
-  }
-  if (eneCluster < 0.0) {
-    std::cout << "Error in 'DDDSTViewer::returnClusterColor': eneCluster is negative!" << std::endl;
-  }
-  if (cutoff_min < 0.0) {
-    std::cout << "Error in 'DDDSTViewer::returnClusterColor': eneCluster is negative!" << std::endl;
-  }
-
-  int color = 0x000000; //default colour: black
-
-  // Input values in log-scale
-  float log_ene = std::log(eneCluster+1);
-  float log_min = std::log(cutoff_min+1);
-  float log_max = std::log(cutoff_max+1);
-
-  int color_steps = 16*16; // 16*16 different steps from 0x600000 to 0x6000FF
-  float log_delta = log_max - log_min;
-  float log_step = log_delta/color_steps;
-
-  int color_delta = (int) ((log_ene-log_min)/log_step); // which colour bin does the value go to? We have [0,16*16] bins
-
-  //int color_delta_2 = (int)color_delta*16*16/2;
-  //int color_delta_3 = (int)color_delta_2*16*16;
-
-  if (color_delta >= 16*16){
-    color = 0x990000;
-  }
-  else if (color_delta < 0){
-    color = 0x9900FF;
-  }
-  else {
-    color = 0x9900FF - color_delta;// + color_delta_2 - color_delta_3;
-  }
-
-  //		// debug
-  //		std::cout << "DEBUG: DDDSTViewer::returnClusterColor()" << std::endl;
-  //		std::cout << "log_ene = " << log_ene << std::endl;
-  //		std::cout << "log_min = " << log_min << std::endl;
-  //		std::cout << "log_max = " << log_max << std::endl;
-  //		std::cout << "log_step = " << log_step << std::endl;
-  //		std::cout << "color_delta = " << color_delta << std::endl;
-  //		using std::hex;
-  //      	std::cout << hex << color << std::endl;
-
-  return color;
-}
-
-
-void DDDSTViewer::showLegendSpectrum(const unsigned int color_steps, char scale, int colorMap, float ene_min, float ene_max, unsigned int ticks){
+void DDDSTViewer::showLegendSpectrum(const unsigned int color_steps, char scale, int colorMap, float en_min, float en_max, unsigned int ticks){
 
   const unsigned int numberOfColours = 3;
   unsigned int** rgb_matrix = new unsigned int*[color_steps]; //legend colour matrix;
@@ -659,105 +492,34 @@ void DDDSTViewer::showLegendSpectrum(const unsigned int color_steps, char scale,
     //			std::cout << "green = " << rgb_matrix[i][1] << std::endl;
     //			std::cout << "blue = " << rgb_matrix[i][2] << std::endl;
   }
-  ced_legend(ene_min, ene_max, color_steps, rgb_matrix, ticks, scale);
+  ced_legend(en_min, en_max, color_steps, rgb_matrix, ticks, scale);
 }
 
-int DDDSTViewer::returnRGBClusterColor(float eneCluster, float cutoff_min, float cutoff_max, int color_steps, char scale, int colorMap){
-
-  int color = 0x000000; //default colour: black
-  int color_delta = 0; //colour step in the [0, color_steps] spectrum
-  unsigned int rgb[] = {0, 0, 0}; //array of RGB to be returned as one 0x000000 HEX value
-
-  /**
-   * Check the input values for sanity */
-  if (cutoff_min > cutoff_max) {
-    std::cout << "Error in 'DDDSTViewer::returnRGBClusterColor': cutoff_min < cutoff_max" << std::endl;
+int DDDSTViewer::returnRGBClusterColor(float energy, float cutoff_min, float cutoff_max, int color_steps, char scale, int color_map){
+  if (color_map < 0 || color_map > 6) {
+    streamlog_out(ERROR) << "Wrong color_map parameter!" << std::endl;
   }
-  if (eneCluster < 0.0) {
-    std::cout << "Error in 'DDDSTViewer::returnRGBClusterColor': eneCluster is negative!" << std::endl;
-  }
-  if (cutoff_min < 0.0) {
-    std::cout << "Error in 'DDDSTViewer::returnRGBClusterColor': eneCluster is negative!" << std::endl;
-  }
-  if (colorMap < 0 || colorMap > 6) {
-    std::cout << "Error in 'DDDSTViewer::returnRGBClusterColor': wrong colorMap param!" << std::endl;
-  }
-
-  // Input values in log-scale
-  float log_ene = std::log(eneCluster+1);
-  float log_min = std::log(cutoff_min+1);
-  float log_max = std::log(cutoff_max+1);
-
-  float log_delta = log_max - log_min;
-  float log_step = log_delta/(float)color_steps;
-
-  /**
-   * Different color scales */
-  switch(scale){
-  case 'a': default: //log
-
-    // log scale color_delta increment
-    color_delta = (int) ((log_ene-log_min)/log_step); // which colour bin does the value go to? We have [0x00,0xFF] bins
-
-    //std::cout << "Log color scale choosen" << std::endl;
-    break;
-
-  case 'b': //linear
-
-    color_delta = (int)((eneCluster - cutoff_min)/(cutoff_max - cutoff_min)*color_steps);
-
-    //std::cout << "linear color scale choosen" << std::endl;;
-    break;
-  }
-
-  /*
-   * Bins outside of the colour range */
-  if (color_delta >= color_steps){
-    color_delta = color_steps;
-    //std::cout << "color_delta > color_steps" << std::endl;
-  }
-  if (color_delta < 0){
-    color_delta = 0;
-    //std::cout << "color_delta < 0" << std::endl;
-  }
-
-  ColorMap::selectColorMap(colorMap)(rgb, color_delta, 0, color_steps);
-  //		// DEBUG
-  //		std::cout << "color_delta = " << color_delta << std::endl;
-  //		std::cout << "color_delta = " << color_delta << std::endl;
-  //		std::cout << "red = " << rgb[0] << std::endl;
-  //		std::cout << "green = " << rgb[1] << std::endl;
-  //		std::cout << "blue = " << rgb[2] << std::endl;
-
-  color = ColorMap::RGB2HEX(rgb[0],rgb[1],rgb[2]);
-
-  return color;
+  // Implicit conversion of the double returned from the function to an int in
+  // the range of color_steps.
+  int color_delta = viewer_util::convertScales(energy, cutoff_max, cutoff_min,
+    color_steps, 0, viewer_util::ScaleMapping(scale));
+  unsigned int rgb[] = {0, 0, 0};
+  ColorMap::selectColorMap(color_map)(rgb, color_delta, 0, color_steps);
+  int hex_color = ColorMap::RGB2HEX(rgb[0], rgb[1], rgb[2]);
+  return hex_color;
 }
 
-/**
- * PRELIM */
-int DDDSTViewer::returnTrackSize(float type){
 
-  int size = 1; //default size
-
-  if (type==2112)			size = 1; //positive hadron
-  else if (type==-2112)	size = 1; //negative hadron
-
-  return size;
-}
 
 int DDDSTViewer::returnClusterSize(float eneCluster, float cutoff_min, float cutoff_max){
-
-  /**
-   * Check the input values for sanity */
   if (cutoff_min > cutoff_max) {
-    std::cout << "Error in 'DDDSTViewer::returnClusterSize': cutoff_min < cutoff_max" << std::endl;
+    streamlog_out(ERROR) << "cutoff_min < cutoff_max" << std::endl;
   }
   if (eneCluster < 0.0) {
-    std::cout << "Error in 'DDDSTViewer::returnClusterSize': eneCluster is negative!" << std::endl;
+    streamlog_out(ERROR) << "eneCluster is negative!" << std::endl;
   }
   if (cutoff_min < 0.0) {
-    std::cout << "Error in 'DDDSTViewer::returnClusterSize': eneCluster is negative!" << std::endl;
+    streamlog_out(ERROR) << "eneCluster is negative!" << std::endl;
   }
 
   int size = 0; //default size: zero
@@ -792,15 +554,6 @@ int DDDSTViewer::returnClusterSize(float eneCluster, float cutoff_min, float cut
   if (size <=0){
     std::cout << "Error in 'DDDSTViewer::returnClusterSize': return size is negative!" << std::endl;
   }
-
-  //		std::cout << "DEBUG: DDDSTViewer::returnClusterSize()" << std::endl;
-  //		std::cout << "log_ene = " << log_ene << std::endl;
-  //		std::cout << "log_min = " << log_min << std::endl;
-  //		std::cout << "log_max = " << log_max << std::endl;
-  //		std::cout << "log_step = " << log_step << std::endl;
-  //		std::cout << "size_delta = " << size_delta << std::endl;
-  //		std::cout << size << std::endl;
-
   return size;
 }
 

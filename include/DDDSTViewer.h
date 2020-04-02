@@ -1,134 +1,62 @@
+/**
+ *  Event display for DST files.
+ *
+ *  Advanced functionality over the original DSTViewer.
+ *  Amongst others, the detector geometry is ported to DD4hep.
+ *
+ *    @author: Szymon Daraszewicz, DESY summerstudent (original).
+ *    @author:  iLCSoft/CEDViewer author list (DSTViewer).
+ *    @author Jonas Kunath, LLR, CNRS, École Polytechnique, IPP.
+ **/
+// TODO: Clean up includes.
 #ifndef DD_DST_VIEWER_H
 #define DD_DST_VIEWER_H
+// -- C++ STL headers.
 
+// -- ROOT headers.
+
+// -- LCIO headers.
+#include "IMPL/LCCollectionVec.h"
+
+// -- Marlin headers.
 #include "marlin/Processor.h"
-#include "EVENT/MCParticle.h"
-#include "lcio.h"
-#include <string>
-#include <vector>
 
-using namespace lcio ;
-using namespace marlin ;
+// -- Header for this processor and other project-specific headers.
 
-
-/** DDDSTViewer <br>
- *  This processor displays .... <br>
- *  @param ParticleCollection : name of reconstructed Particle collection to be displayed <br>
-     .....
- *  <br>
- *  @authors Szymon Daraszewicz (DESY/UOE)
- *  @version $Id$
- */
 class DDDSTViewer : public Processor {
-
  public:
-
-  virtual Processor*  newProcessor() { return new DDDSTViewer ; }
-
-  DDDSTViewer() ;
-
-  virtual void init() ;
-
-  virtual void processRunHeader( LCRunHeader* run ) ;
-
-  virtual void processEvent( LCEvent * evt ) ;
-
-  virtual void check( LCEvent * evt ) ;
-
-  virtual void end() ;
-
+  virtual Processor*  newProcessor() { return new DDDSTViewer(); }
+  DDDSTViewer();
+  virtual void init();
+  virtual void processRunHeader(EVENT::LCRunHeader* run);
+  virtual void processEvent(EVENT::LCEvent* event);
 
  protected:
+  // -- Parameters registered in steering file.
+  std::string rp_col_name_{};
+  std::string mc_col_name_{};
+  StringVec  jet_col_names_{};
+  int wait_for_keyboard_{};
+  float e_draw_cut_{};
+  // -- Additional constants.
+  int n_run_;
+  int n_event_;
+  // -- Individual member functions.
+  void writeLayerDescription(void);
 
-  int _nRun ;
-  int _nEvt ;
-  // bool dispHelix;
-
-//  std::vector<std::string> _caloHitCollections;
-//  std::vector<std::string> _simCaloHitCollections;
-//  std::vector<std::string> _trackerHitCollections;
-//  std::vector<std::string> _simTrackerHitCollections;
-//  std::string _trueClustersCollection;
-//  std::string _trueTracksCollection;
-//  std::string _clustersCollection;
-//  std::string _tracksCollection;
-  std::string _particleCollection;
-
-  StringVec jet_col_names_;
-
-  int _layerCaloHit;
-  int _layerSimCaloHit;
-  int _layerTrackerHit;
-  int _layerSimTrackerHit;
-  int _layerTrueClusters;
-  int _layerTrueTracks;
-  int _layerClusters;
-  int _layerTracks;
-  int _layerMCP;
-  int _layerBosons;
-  int _layerReco;
-
-
-  int _detModel;
-
-  int _waitForKeyboard;
-
-  std::map<MCParticle *, int > _mcpList;
 
   int returnTrackColor(int type);
-
-  /**
-   * @author: S.Daraszewicz (UoE)
-   * @date: 21.08.08
-   *
-   * @param eneCluster : Energy of the cluster
-   * @param cutoff_min : Min cut for the cluster energy
-   * @param cutoff_max : Max cut for the cluster energy
-   *
-   * Returns the colour for the visualization of a cluster (in log scale). Colours run from red (0x660000) to blue (0x6600FF)
-   * for high and low energy particles respectively.
-   */
   int returnClusterColor(float eneCluster, float cutoff_min, float cutoff_max);
-
-  /**
-   * @author: S.Daraszewicz (UoE)
-   * @date: 22.08.08
-   *
-   * @param eneCluster : Energy of the cluster
-   * @param cutoff_min : Min cut for the cluster energy
-   * @param cutoff_max : Max cut for the cluster energy
-   * @param color_steps: Number of colours to be used in the scale
-   * @param scale	   : Linear or Logarithmic colour scale
-   * @param colorMap   : Color map type to be used
-   *
-   * Returns the size for the visualisation of a cluster (in log scale) within user defined sizes.
-   */
-
-    void showLegendSpectrum(const unsigned int color_steps, char scale, int colorMap, float ene_min, float ene_max, unsigned int ticks);
-
-  	int returnRGBClusterColor(float eneCluster, float cutoff_min, float cutoff_max, int color_steps, char scale, int colorMap);
-
-  	int returnClusterSize(float eneCluster, float cutoff_min, float cutoff_max);
-
-  	int returnTrackSize(float type);
-
-  	int returnJetLayer(std::string jetColName);
-
-  	int returnIpLayer(std::string jetColName);
-
-  	int returnJetColor(std::string jetColName, int colNumber);
-
-  	int addAlphaChannelToColor(int color, int alphaChannel);
-
-  	float * returnConeColor(std::string jetColName);
-
-  	float _bField;
-    float _e_min_draw;
-    std::string _mc_collection;
-
-    void writeLayerDescription(void);
-} ;
-
+  void showLegendSpectrum(const unsigned int color_steps, char scale, int colorMap, float ene_min, float ene_max, unsigned int ticks);
+  int returnRGBClusterColor(float eneCluster, float cutoff_min, float cutoff_max, int color_steps, char scale, int colorMap);
+  int returnClusterSize(float eneCluster, float cutoff_min, float cutoff_max);
+  int returnTrackSize(float type);
+  int returnJetLayer(std::string jetColName);
+  int returnIpLayer(std::string jetColName);
+  int returnJetColor(std::string jetColName, int colNumber);
+  int addAlphaChannelToColor(int color, int alphaChannel);
+  float * returnConeColor(std::string jetColName);
+};
 #endif
 
 

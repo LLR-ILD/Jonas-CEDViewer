@@ -14,6 +14,15 @@
 
 #ifndef _VIEWER_UTIL_H_
 #define _VIEWER_UTIL_H_
+// -- C++ STL headers.
+
+// -- ROOT headers.
+
+// -- LCIO headers.
+#include "EVENT/MCParticle.h"
+#include "EVENT/ReconstructedParticle.h"
+
+// -- Marlin headers.
 
 // -- Includes for detector drawing.
 #include "DD4hep/Detector.h"
@@ -47,11 +56,53 @@ CalorimeterDrawParams getCalorimeterParameters(dd4hep::Detector& the_detector,
 // The signs of the tracks' directions are ultimately determined by the momenta.
 double calculateTrackLength(std::string type, dd4hep::Detector& the_detector,
     double x, double y, double z, double px, double py, double pz);
-
-
 // ----------------------------------------------------------------------------
 // Functions additional to those from DDCEDViewer.
+
+// Facilitate simple particle arithmetics.
+struct AnyParticle {
+  double E, x, y, z;
+  int charge;
+  AnyParticle() {E = x = y = z = charge = 0;}
+  AnyParticle(EVENT::ReconstructedParticle* rp) {
+    const double* p = rp->getMomentum();
+    x = p[0]; y = p[1], z = p[2];
+    E = rp->getEnergy();
+    charge = rp->getCharge();
+  }
+  AnyParticle(EVENT::MCParticle* rp) {
+    const double* p = rp->getMomentum();
+    x = p[0]; y = p[1], z = p[2];
+    E = rp->getEnergy();
+    charge = rp->getCharge();
+  }
+  AnyParticle operator+=(const AnyParticle rhs) {
+    this->E += rhs.E;
+    this->x += rhs.x;
+    this->y += rhs.y;
+    this->z += rhs.z;
+    this->charge += rhs.charge;
+    return *this;
+  }
+  double getP() {
+    return sqrt(x*x + y*y + z*z);
+  }
+};
+// ----------------------------------------------------------------------------
+// Functionality related to color.
+
 int fromRGBAToInt(float* rgba_color);
+
+enum ScaleMapping {
+  kLinear = 'b',
+  kLog = 'a',
+};
+
+// Convert the value laying inside the old scale to a value in a new scale,
+// possibly with a non-linear mapping.
+// Useful e.g. for conversion of an energy value to a color scale.
+double viewer_util::convertScales(double value, double old_max, double old_min,
+    double new_max, double new_min=0, ScaleMapping conv=kLog);
 }  // namespace viewer_util
 
 #endif

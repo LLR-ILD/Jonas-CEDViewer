@@ -202,9 +202,65 @@ double viewer_util::calculateTrackLength(std::string type,
       return (dist_to_endcap_z + endcap.delta_z) * sqrt(1. + pow(pt_over_pz,2));
   }
 }
+// ----------------------------------------------------------------------------
+// Functionality related to color.
 
 int viewer_util::fromRGBAToInt(float* rgba_color) {
   return int(rgba_color[2]*(15*16+15))
        + int(rgba_color[1]*(15*16+15))*16*16
        + int(rgba_color[0]*(15*16+15))*16*16*16*16;
+}
+
+// Convert the value laying inside the old scale to a value in a new scale,
+// possibly with a non-linear mapping.
+// Useful e.g. for conversion of an energy value to a color scale.
+double viewer_util::convertScales(double value, double old_max, double old_min,
+    double new_max, double new_min=0, viewer_util::ScaleMapping conv=kLog) {
+  // Sanity checks for the input.
+  if (new_max > new_min) {
+    double temp = new_max;
+    new_max = new_min;
+    new_min = temp;
+  }
+  if (old_max > old_min) {
+    double temp = old_max;
+    old_max = old_min;
+    old_min = temp;
+  }
+  if (old_min == old_max || new_min == new_max) {
+    streamlog_out(ERROR) << "One of the scales has length 0!" << std::endl;
+    return new_max;
+  }
+  // If the given value lies outside of the old scales boundary, we will just
+  // set the converted value to the respective boundary value of the new scale.
+  if (value > old_max) {
+    return new_max;
+  } else if (value < old_min) {
+    return new_min;
+  }
+  if (value < 0 && conv == kLog) {
+    streamlog_out(ERROR) << "When choosing a scale with logarithmic conversion "
+        "the old minimum and maximum, as well as the old given value must be "
+        "positive! Here we encountered" << std::endl
+        << old_min << old_max << value << std::endl
+        << "respectively. To not break, the highest value of the new scale is "
+        "returned. Please reconsider your input to "
+        "`convertScales`!" << std::endl;
+    return new_max;
+  }
+  // Here the actual conversion takes place.
+  switch (conv) {
+    case kLog: default:
+      // For this case, all the old-scale values are replaced by their
+      // log versions.
+      old_max = std::log(old_max + 1);
+      old_min = std::log(old_min + 1);
+      value   = std::log(value   + 1);
+      break;
+    case kLinear:
+      // The old values are already in the form that is required.
+      break;
+  }
+  return new_min + (value - old_min) / (old_max - old_min)
+                                     * (new_max - new_min);
 }
