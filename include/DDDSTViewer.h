@@ -8,7 +8,6 @@
  *    @author:  iLCSoft/CEDViewer author list (DSTViewer).
  *    @author Jonas Kunath, LLR, CNRS, École Polytechnique, IPP.
  **/
-// TODO: Clean up includes.
 #ifndef DD_DST_VIEWER_H
 #define DD_DST_VIEWER_H
 // -- C++ STL headers.
@@ -16,7 +15,6 @@
 // -- ROOT headers.
 
 // -- LCIO headers.
-#include "IMPL/LCCollectionVec.h"
 
 // -- Marlin headers.
 #include "marlin/Processor.h"
@@ -37,27 +35,22 @@ class DDDSTViewer : public Processor {
   std::string mc_col_name_{};
   StringVec  jet_col_names_{};
   int wait_for_keyboard_{};
-  float e_draw_cut_{};
+  double e_draw_cut_{};
   // -- Additional constants.
-  int n_run_;
-  int n_event_;
-  // -- Individual member functions.
+  int n_run_ = 0;
+  int n_event_ = 0;
+  // -- Additional member functions.
   void writeLayerDescription(void);
-
-
-  int returnTrackColor(int type);
-  int returnClusterColor(float eneCluster, float cutoff_min, float cutoff_max);
-  void showLegendSpectrum(const unsigned int color_steps, char scale, int colorMap, float ene_min, float ene_max, unsigned int ticks);
-  int returnRGBClusterColor(float eneCluster, float cutoff_min, float cutoff_max, int color_steps, char scale, int colorMap);
-  int returnClusterSize(float eneCluster, float cutoff_min, float cutoff_max);
-  int returnTrackSize(float type);
-  int returnJetLayer(std::string jetColName);
-  int returnIpLayer(std::string jetColName);
-  int returnJetColor(std::string jetColName, int colNumber);
-  int addAlphaChannelToColor(int color, int alphaChannel);
-  float * returnConeColor(std::string jetColName);
+  int returnTrackColor(int particle_type);
+  void showLegendSpectrum(char scale, int color_map,
+      double ene_min, double ene_max, unsigned int ticks);
+  int returnRGBClusterColor(double energy,
+      double cutoff_min, double cutoff_max, char scale, int color_map);
+  double returnClusterSize(double en_cluster,
+      double cutoff_min, double cutoff_max);
+  int returnJetLayer(std::string jet_col_name);
+  int returnIpLayer(std::string jet_col_name);
+  int returnJetColor(int col_number);
+  int addTransparencyToColor(int color, int transparency);
 };
 #endif
-
-
-

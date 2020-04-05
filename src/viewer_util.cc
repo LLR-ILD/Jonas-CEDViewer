@@ -211,11 +211,20 @@ int viewer_util::fromRGBAToInt(float* rgba_color) {
        + int(rgba_color[0]*(15*16+15))*16*16*16*16;
 }
 
+float* viewer_util::fromIntToRGBA(int hex_value) {
+  float rgba[4];
+  rgba[0] = ((hex_value >> 32) & 0xFF) / 255.0;  // Extract the transparency.
+  rgba[1] = ((hex_value >> 16) & 0xFF) / 255.0;  // Extract the RR byte.
+  rgba[2] = ((hex_value >> 8)  & 0xFF) / 255.0;  // Extract the GG byte.
+  rgba[3] = ((hex_value)       & 0xFF) / 255.0;  // Extract the BB byte.
+  return rgba;
+}
+
 // Convert the value laying inside the old scale to a value in a new scale,
 // possibly with a non-linear mapping.
 // Useful e.g. for conversion of an energy value to a color scale.
 double viewer_util::convertScales(double value, double old_max, double old_min,
-    double new_max, double new_min=0, viewer_util::ScaleMapping conv=kLog) {
+    double new_max, double new_min, viewer_util::ScaleMapping conv) {
   // Sanity checks for the input.
   if (new_max > new_min) {
     double temp = new_max;

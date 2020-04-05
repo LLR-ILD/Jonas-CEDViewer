@@ -3,22 +3,72 @@
  *    @author:  iLCSoft/CEDViewer author list (DSTViewer).
  *    @author Jonas Kunath, LLR, CNRS, École Polytechnique, IPP.
  **/
-// TODO: Clean up includes.
+// -- C++ STL headers.
+
+// -- ROOT headers.
+
+// -- LCIO headers.
+#include "EVENT/MCParticle.h"
+#include "EVENT/ReconstructedParticle.h"
+
+// -- Marlin headers.
+////#include "ClusterShapes.h"
+////#include "HelixClass.h"
+
+// -- Includes for detector drawing.
+#include "DD4hep/DD4hepUnits.h"
 #include "DD4hep/Detector.h"
 #include "DDMarlinCED.h"
+
+// -- Header for this processor and other project-specific headers.
+#include "ColorMap.h"
+#include "DDDSTViewer.h"
 #include "viewer_util.h"
 
-#include "DDDSTViewer.h"
-#include <EVENT/ReconstructedParticle.h>
-#include <EVENT/MCParticle.h>
-#include <iostream>
-#include "ClusterShapes.h"
+// -- Using-declarations and global constants.
+// Only in .cc files, never in .h header files!
+const char kScale              = viewer_util::kLog;
+const unsigned int kColorSteps = 256;
+const double kEnMin            = 0.;
+const double kEnMax            = 100.;
+// Thickness of drawn lines.
+const int kHelixSize           = 1;
+const int kLineSize            = 1;
+const int kHitSize             = 2;
+const int kHitMarker           = 1;
+// Scaling factor for the momenta at IP line length.
+const double kMomScale         = 100;
 
-#include "HelixClass.h"
-#include <math.h>
-#include "ColorMap.h"
+enum ColorMaps {
+  kHotColorMap = 1,
+  kColdColorMap,
+  kJetColorMap,
+  kCyclicColorMap,
+  kGreyColorMap,
+  kBlueColorMap,
+};
 
-enum layers {
+enum ConeColor {
+  kConeWhite     = 0x555555,
+  kConeBlack     = 0x000000,
+  kConeRed       = 0x550000,
+  kConeGreen     = 0x008000,
+  kConeYellow    = 0x555500,
+  kConeFuchsia   = 0x550055,
+  kConeBlue      = 0x000055,
+  kConeOrange    = 0x55a500,
+  kConeViolet    = 0xee82ee,
+  kConePurple    = 0x800080,
+  kConeSilver    = 0xc0c0c0,
+  kConeGold      = 0x55d700,
+  kConeGray      = 0x808080,
+  kConeAqua      = 0x005555,
+  kConeSkyBlue   = 0x87ceeb,
+  kConeLightBlue = 0xa558e6,
+  kConeKhaki     = 0xf0e68c,
+};
+
+enum Layers {
   // PFO momentum at interaction point.
   kMomentum         =  1,  // Key: 1.
   kMomBelowECut     = 11,  // Key: !.
@@ -48,6 +98,7 @@ enum layers {
   kMCTau            = 23,  // Key: i.
   kMCOther          = 24,  // Key: o.
 };
+// ----------------------------------------------------------------------------
 
 DDDSTViewer aDDDSTViewer;
 
@@ -95,11 +146,12 @@ DDDSTViewer::DDDSTViewer() : Processor("DDDSTViewer") {
    std::string("MCParticlesSkimmed"));
 
   StringVec  default_jet_col_names{
-    "Durham_2Jets",
-    "Durham_3Jets"
-    "Durham_4Jets"
-    "Durham_5Jets"
-    "Durham_6Jets"
+    // There are no jet collections in the DST files.
+    //"Durham_2Jets",
+    //"Durham_3Jets"
+    //"Durham_4Jets"
+    //"Durham_5Jets"
+    //"Durham_6Jets"
   };
   registerInputCollections(
     LCIO::RECONSTRUCTEDPARTICLE,
@@ -118,7 +170,7 @@ DDDSTViewer::DDDSTViewer() : Processor("DDDSTViewer") {
     "EDrawCut",
     "Energy threshold to divide between low and high energy drawing.",
     e_draw_cut_,
-    0.0f);
+    (double) 0.0);
 }
 
 void DDDSTViewer::init() {
@@ -126,7 +178,7 @@ void DDDSTViewer::init() {
   printParameters();
 }
 
-void DDDSTViewer::processRunHeader( LCRunHeader* run) {
+void DDDSTViewer::processRunHeader(LCRunHeader* run) {
   n_run_ = run->getRunNumber();
 }
 
@@ -135,7 +187,7 @@ void DDDSTViewer::processEvent(LCEvent* event) {
   streamlog_out(DEBUG) << "Processing event no " << n_event_
     << " - run " << n_run_ << std::endl;
   DDMarlinCED::newEvent(this);
-  DDDSTViewer::writeLayerDescription();
+  writeLayerDescription();
   // Get the detector instance (now dd4hep, replaced gear).
   dd4hep::Detector& the_detector = dd4hep::Detector::getInstance();
   // For now, we opt to draw the geometry as simplified structures instead of
@@ -146,7 +198,7 @@ void DDDSTViewer::processEvent(LCEvent* event) {
   p_handler.update(event);
 // Drawing the reconstructed particles.
   streamlog_out(DEBUG) << "Drawing RPs from collection: "
-      << rp_col_name_ << std::endl ;
+      << rp_col_name_ << "." << std::endl ;
   EVENT::LCCollection* rp_col = nullptr;
   try {
     rp_col = event->getCollection(rp_col_name_);
@@ -157,17 +209,14 @@ void DDDSTViewer::processEvent(LCEvent* event) {
   if (rp_col) {
     // Draw the helix of charged tracks (other than muons) only in the TPC
     // within the tracker volume.
+    double helix_min_r = 0.0;
     double helix_max_r = viewer_util::getTrackerExtent(the_detector)[0];
     double helix_max_z = viewer_util::getTrackerExtent(the_detector)[1];
     viewer_util::AnyParticle ev_sum;
     // Obtain the detector's B-field for the per-event helix calculation.
-    double* b_vector = new double[3];
+    double b_vector[3];
     the_detector.field().combinedMagnetic(dd4hep::Position(0,0,0), b_vector);
     double b_field_z = b_vector[2] / dd4hep::tesla;
-    delete[] b_vector;
-    // Define the scale for object color and size.
-    double en_min = 0.0, en_max = 100.0;  // Clusters,
-    double ptot_min = 0.0, ptot_max = 25.0;  // Tracks.
     for (int i=0; i < rp_col->getNumberOfElements(); ++i) {
       EVENT::ReconstructedParticle* rp =
         static_cast<EVENT::ReconstructedParticle*>(rp_col->getElementAt(i));
@@ -176,7 +225,7 @@ void DDDSTViewer::processEvent(LCEvent* event) {
       ev_sum += ap;
       // Reference point of the particle. So far, only origin is implemented.
       std::vector<double> ref_pt = {0, 0, 0};
-      // Define the layers the rp's components are printed to (E-dependent).
+      // Define the layers the rp components are printed to (E-dependent).
       int mom_layer = kMomentum;
       int tpc_layer = kTPC;
       int hit_layer = kHit;
@@ -187,207 +236,169 @@ void DDDSTViewer::processEvent(LCEvent* event) {
         hit_layer = kHitBelowECut;
         clu_layer = kClusterBelowECut;
       }
-      int type = rp->getType();
-      int color = returnTrackColor(type);
-      int track_size = 1;
-
-      DDMarlinCED::drawHelix(b_field_z, ap.charge, ref_pt[0], ref_pt[1], ref_pt[2], ap.x, ap.y, ap.z, tpc_layer,
-          track_size, color, 0.0, helix_max_r, helix_max_z, rp->id() );
-
-      //				/** Draw momentum lines from the ip */
-      char Mscale = 'b'; // 'b': linear, 'a': log
-      int McolorMap = 2; //hot: 3
-      int McolorSteps = 256;
-      int Mcolor = returnRGBClusterColor(ap.getP(), ptot_min, ptot_max, McolorSteps, Mscale, McolorMap);
-      int LineSize = 1;
-      float momScale = 100;
-      ced_line_ID(ref_pt[0], ref_pt[1], ref_pt[2], momScale*ap.x, momScale*ap.y, momScale*ap.z, mom_layer, LineSize, Mcolor, rp->id()); //the right id?
-
-
-
-
-      ClusterVec clusterVec = rp->getClusters();
-      int nClusters = (int)clusterVec.size();
-      if (nClusters > 0 ) {
-	// std::cout 	<< "nCluster > 0" << std::endl;
-	// std::cout 	<<  clusterVec.size() <<std::endl;
-
-	Cluster * cluster = clusterVec[0];
-
-	double * center  = new double[3];
-	float * center_r  = new float[3];
-	center[0] = cluster->getPosition()[0];
-	center[1] = cluster->getPosition()[1];
-	center[2] = cluster->getPosition()[2];
-
-	center_r[0] = (float)cluster->getPosition()[0];
-	center_r[1] = (float)cluster->getPosition()[1];
-	center_r[2] = (float)cluster->getPosition()[2];
-
-	float phi = cluster->getIPhi();
-	float theta = cluster->getITheta();
-
-	if( phi ==0. && theta==0.){
-	  // use the cluster postion:
-	  theta = atan( sqrt( center[0]*center[0] + center[1]*center[1] ) / center[2]  ) ;
-	  phi = atan2( center[1] , center[0] ) ;
-	}
-
-	float eneCluster = cluster->getEnergy();
-
-  double rotate[] = {0.0, 0.0, 0.0};
-	// for particles centered at the origin
-	if (ref_pt == std::vector<double>{0, 0, 0}){
-	  rotate[0] = 0.0;
-	  rotate[1] = theta*180/M_PI;
-	  rotate[2] = phi*180/M_PI;
-	}
-	else {
-	  streamlog_out( DEBUG3 )	<< "This is not yet implemented" << std::endl;
-	  return;
-	}
-
-
-	double sizes[] = {100.0, 100.0, 100.0};
-	int scale_z = 4;
-	sizes[0] = returnClusterSize(eneCluster, en_min, en_max);
-	sizes[1] = sizes[0];
-	sizes[2] = scale_z*returnClusterSize(eneCluster, en_min, en_max);
-
-	char scale = 'a'; // 'b': linear, 'a': log
-	int colorMap = 3; //jet: 3
-	int colorSteps = 256;
-	int color = returnRGBClusterColor(eneCluster, en_min, en_max, colorSteps, scale, colorMap);
-
-	//	int hit_type = 1 | HIT_LAYER;
-
-	int cylinder_sides = 30;
-	//problem with fisheye view
-	ced_geocylinder_r(sizes[0]/2, sizes[2], center, rotate, cylinder_sides, color, clu_layer);
-
-
-
-	//ced_hit(center[0],center[1],center[2], hit_type, (int)(sqrt(2)*sizes[0]/4), color);
-	ced_hit_ID(center[0],center[1],center[2], 1, hit_layer, (int)(sqrt(2)*sizes[0]/4), color, cluster->id()); //hauke
-
-
-	int transparency = 0x66;
-	int rgba = addAlphaChannelToColor(color, transparency);
-
-	// Originally: BACKUP_LAYER.
-  ced_cluellipse_r_ID((float)sizes[0], (float)sizes[2], center_r, rotate, clu_layer, rgba, cluster->id()); //hauke
-
-
-	transparency = 0xCC;
-	rgba = addAlphaChannelToColor(color, transparency);
-
-	//ced_ellipsoid_r(sizes, center, rotate, BACKUP_LAYER2, rgba);
-	// Originally: BACKUP_LAYER2.
-	ced_ellipsoid_r_ID(sizes, center, rotate, clu_layer, rgba, cluster->id()); //hauke
-
-	/*
-	 * End points for the arrow
-	 */
-
-	int sizeLine = 2;
-	//int ml_line = 9;
-	float radius = (float)0.5*sizes[2];
-	float arrow = 0.2*radius;
-	int color_arrow = color + 0x009900; //colour of the needle
-  ///std::vector<double> end
-	float x_end = center[0] + (radius - arrow) * std::sin(theta)*std::cos(phi);
-	float y_end = center[1] + (radius - arrow) * std::sin(theta)*std::sin(phi);
-	float z_end = center[2] + (radius - arrow) * std::cos(theta);
-
-	float xArrowEnd = center[0] + (radius) * std::sin(theta)*std::cos(phi);
-	float yArrowEnd = center[1] + (radius) * std::sin(theta)*std::sin(phi);
-	float zArrowEnd = center[2] + (radius) * std::cos(theta);
-
-	// this is the direction arrow
-	// Originally: CLU_LAYER.
-	ced_line_ID(center[0], center[1], center[2], x_end, y_end, z_end, clu_layer, sizeLine, color,cluster->id()); //hauke
-	// Originally: CLU_LAYER.
-  ced_line_ID(x_end, y_end, z_end, xArrowEnd, yArrowEnd, zArrowEnd, clu_layer, sizeLine, color_arrow, cluster->id());//hauke
-
+    // Two kinds of objects should be drawn for each reconstructed particle:
+    // The track (in the case of charged RPs) and the cluster.
+    // Lets start with the track.
+      int track_color = returnTrackColor(rp->getType());
+      DDMarlinCED::drawHelix(b_field_z, ap.charge,
+          ref_pt[0], ref_pt[1], ref_pt[2],
+          ap.x, ap.y, ap.z, tpc_layer,
+          kHelixSize, track_color,
+          helix_min_r, helix_max_r, helix_max_z, rp->id());
+      // For the momentum lines, both length and color are momentum dependent.
+      int mom_line_color = returnRGBClusterColor(ap.getP(), kEnMin, kEnMax,
+          kScale, kColdColorMap);
+      ced_line_ID(ref_pt[0], ref_pt[1], ref_pt[2],
+          kMomScale*ap.x, kMomScale*ap.y, kMomScale*ap.z, mom_layer,
+          kLineSize, mom_line_color, rp->id());
+    // Now the clusters.
+      if (rp->getClusters().size() > 0) {
+        // Only draw a single cluster per particle.
+        EVENT::Cluster* cluster = rp->getClusters()[0];
+        // As input to different functions, both float and double array are
+        // needed.
+        //const float* const_ctr = cluster->getPosition();
+        float const_ctr[3] = {cluster->getPosition()[0],
+            cluster->getPosition()[1], cluster->getPosition()[2]};
+        float center_f[3] = {const_ctr[0], const_ctr[1], const_ctr[2]};
+        double center_d[3] = {const_ctr[0], const_ctr[1], const_ctr[2]};
+        float phi = cluster->getIPhi();
+        float theta = cluster->getITheta();
+        if (phi == 0 && theta == 0) {
+          phi = atan2(center_d[1], center_d[0]);
+          theta = atan(sqrt(center_d[0]*center_d[0] + center_d[1]*center_d[1])
+                       / center_d[2]);
+        }
+        // for particles centered at the origin
+        if (ref_pt != std::vector<double>{0, 0, 0}){
+          streamlog_out(DEBUG3)	<< "This is not yet implemented. The rotation "
+            "operation so far is based on the reference point of the track "
+            "being the center of the detector." << std::endl;
+          return;
+        }
+        double rotate[] = {0.0, theta*180/M_PI, phi*180/M_PI};
+        float en_cluster = cluster->getEnergy();
+        double cl_scale = returnClusterSize(en_cluster, kEnMin, kEnMax);
+        double cl_size[] = {cl_scale, cl_scale, 4*cl_scale};
+        int color = returnRGBClusterColor(en_cluster, kEnMin, kEnMax, kScale,
+            kJetColorMap);
+        if (true) {   // Enables picking (and adds the small hit dot).
+          ced_hit_ID(center_d[0], center_d[1], center_d[2], kHitMarker,
+            hit_layer, (int)(sqrt(2)*cl_size[0]/4), color, cluster->id());
+        }
+        if (true) {  // 3 2D ellipses of the cluster extend.
+          int rgba = addTransparencyToColor(color, 0x66);
+          ced_cluellipse_r_ID((float) cl_size[0], (float) cl_size[2],
+              center_f, rotate,
+              clu_layer, rgba, cluster->id());  // Originally: BACKUP_LAYER.
+        }
+        if (true) {  // A filled ellipse. Combined with the previous draw, this
+        // creates a nice ellipsoid (3D).
+          int rgba = addTransparencyToColor(color, 0xCC);
+          ced_ellipsoid_r_ID(cl_size, center_d, rotate,
+              clu_layer, rgba, cluster->id());  // Originally: BACKUP_LAYER2.
+        }
+        ////if (false) {  // Sides of a barrel around the ellipsoid (visual aid for
+        ////// the cluster direction). I don't think it's nice.
+        ////  int cylinder_sides = 30;
+        ////  ced_geocylinder_r(cl_size[0]/2, cl_size[2], center_d, rotate,
+        ////      cylinder_sides, color, clu_layer);
+        ////}
+        ////if (false) {  // A line with arrow. For what, I don't know.
+        //// // The line.
+        ////  float clu_dir[3] = {
+        ////    std::sin(theta)*std::cos(phi),
+        ////    std::sin(theta)*std::sin(phi),
+        ////    std::cos(theta),
+        ////  };
+        ////  int    l_width = 2 * kLineSize;
+        ////  double l_length = 0.5 * cl_size[2];
+        ////  double arrow_length = 0.2 * l_length;
+        ////  float x_end = center_f[0] + (l_length - arrow_length) * clu_dir[0];
+        ////  float y_end = center_f[1] + (l_length - arrow_length) * clu_dir[1];
+        ////  float z_end = center_f[2] + (l_length - arrow_length) * clu_dir[2];
+        ////  ced_line_ID(center_f[0], center_f[1], center_f[2],
+        ////      x_end, y_end, z_end, clu_layer,  // Originally: CLU_LAYER.
+        ////      l_width, color, cluster->id());
+        //// // The direction arrow.
+        ////  // Have the arrow colored a bit differently (greener). DOn't see why..
+        ////  int color_arrow = color + 0x009900;
+        ////  float x_arrow = center_f[0] + (l_length) * clu_dir[0];
+        ////  float y_arrow = center_f[1] + (l_length) * clu_dir[1];
+        ////  float z_arrow = center_f[2] + (l_length) * clu_dir[2];
+        ////  ced_line_ID(x_end, y_end, z_end,
+        ////      x_arrow, y_arrow, z_arrow, clu_layer,  // Originally: CLU_LAYER.
+        ////      l_width, color_arrow, cluster->id());
+        ////}
       }
     }
-
-
-    char scale = 'a'; // 'b': linear, 'a': log
-    int colorMap = 3; //jet: 3
-    unsigned int colorSteps = 256;
-    unsigned int ticks = 6; //middle
-    DDDSTViewer::showLegendSpectrum(colorSteps, scale, colorMap, en_min, en_max, ticks);
-
-    streamlog_out( MESSAGE ) << std::endl
-			     << "Total Energy and Momentum Balance of Event" << std::endl
-			     << "Energy = " << ev_sum.E
-			     << " PX = " << ev_sum.x
-			     << " PY = " << ev_sum.y
-			     << " PZ = " << ev_sum.z
-			     << " Charge = " << ev_sum.charge << std::endl
-			     << std::endl ;
-
-    streamlog_out( DEBUG2 ) << "Setup properties" << std::endl
-			    << "B_Field = " << b_field_z << " T" << std::endl ;
+    unsigned int n_ticks = 6; //middle
+    showLegendSpectrum(kScale, kJetColorMap, kEnMin, kEnMax, n_ticks);
+    streamlog_out(MESSAGE) << std::endl
+      << "Total Energy and Momentum Balance of Event" << std::endl
+      << "Energy  = " << ev_sum.E
+      << " PX     = " << ev_sum.x
+      << " PY     = " << ev_sum.y
+      << " PZ     = " << ev_sum.z
+      << " Charge = " << ev_sum.charge << std::endl << std::endl ;
+    streamlog_out(DEBUG2) << "Setup properties: " << std::endl
+      << "B-Field = " << b_field_z << " T." << std::endl ;
   }
 
 // Now we draw the jets (if any ).
-  for (size_t i = 0; i < jet_col_names_.size(); ++i) {
-    streamlog_out(DEBUG) << " drawing jets from collection "
-      << jet_col_names_[i] << std::endl;
-    LCCollection* col = event->getCollection( jet_col_names_[i] );
-    int nelem = col->getNumberOfElements();
-    for (int j=0; j < nelem; ++j) {
-      ReconstructedParticle * jet = dynamic_cast<ReconstructedParticle*>( col->getElementAt(j) );
-      streamlog_out( DEBUG )  <<   "     - jet energy " << jet->getEnergy() << std::endl ;
-      const double * mom = jet->getMomentum() ;
-      //const double jet_ene = jet->getEnergy();
-      gear::Vector3D v( mom[0], mom[1] , mom[2] ) ;
-      int layer = 0;
-      const ReconstructedParticleVec & pv = jet->getParticles();
-      float pt_norm = 0.0;
-      for (unsigned int k = 0; k<pv.size(); ++k) {
-        const double * pm = pv[k]->getMomentum();
-        gear::Vector3D pp( pm[0], pm[1] , pm[2] ) ;
-        gear::Vector3D ju = v.unit();
-        gear::Vector3D pt = pp - (ju.dot(pp))*ju;
-        pt_norm += pt.r();
-        layer = returnJetLayer(jet_col_names_[i]);
-        int color = returnJetColor(jet_col_names_[i], j);
-        int LineSize = 1;
-        // Reference point of the particle. So far, only origin is implemented.
-        std::vector<double> ref_pt = {0, 0, 0};
-        float momScale = 100;
-        int layerIp = returnIpLayer(jet_col_names_[i]);;
-        ced_line_ID(ref_pt[0], ref_pt[1], ref_pt[2], momScale*pm[0], momScale*pm[1], momScale*pm[2], layerIp, LineSize, color, pv[k]->id()); //hauke
+  for (size_t i_col = 0; i_col < jet_col_names_.size(); ++i_col) {
+    streamlog_out(DEBUG) << "Drawing jets from collection: "
+      << jet_col_names_[i_col] << "." << std::endl ;
+    EVENT::LCCollection* jet_col = nullptr;
+    try {
+      jet_col = event->getCollection(jet_col_names_[i_col]);
+    } catch (DataNotAvailableException &e) {
+      streamlog_out(ERROR) << "Jet collection " << jet_col_names_[i_col]
+        << " is not available!" << std::endl;
+    }
+    if (jet_col) {
+      int jet_layer = returnJetLayer(jet_col_names_[i_col]);
+      for (int i_elem = 0; i_elem < jet_col->getNumberOfElements(); ++i_elem) {
+        EVENT::ReconstructedParticle* jet =
+            static_cast<EVENT::ReconstructedParticle*>(
+                  jet_col->getElementAt(i_elem));
+        viewer_util::AnyParticle ap(jet);
+        double ref_pt[3] = {0., 0., 0. };
+        double rotate[3] = {0., ap.getTheta()*180./M_PI, ap.getPhi()*180./M_PI};
+        const ReconstructedParticleVec & rp_vec = jet->getParticles();
+        double jet_pt = 0.0;
+        for (unsigned int i_part = 0; i_part < rp_vec.size(); ++i_part) {
+          viewer_util::AnyParticle pp(rp_vec[i_part]);
+          double mom_transvers_to_jet = pp.getP()
+              - (pp.x*ap.x + pp.y*ap.y + pp.z*ap.z) / sqrt(ap.getP());
+          jet_pt += mom_transvers_to_jet;
+          int part_color = returnJetColor(i_elem);
+          int layer_ip = returnIpLayer(jet_col_names_[i_col]);;
+          ced_line_ID(ref_pt[0], ref_pt[1], ref_pt[2],
+              kMomScale*pp.x, kMomScale*pp.y, kMomScale*pp.z,
+              layer_ip, kLineSize, part_color, rp_vec[i_part]->id());
+        }
+        int jet_color = returnJetColor(i_elem);
+        int tpc_hit = 104;
+        for (int k = 1; k < tpc_hit; ++k) {
+          ced_line_ID((k-1)/4*ap.x, (k-1)/4*ap.y, (k-1)/4*ap.z,
+            k/4*ap.x, k/4*ap.y, k/4*ap.z,
+            jet_layer, kLineSize, jet_color, jet->id());
+        }
+        ced_hit_ID((tpc_hit-1)/4*ap.x, (tpc_hit-1)/4*ap.y, (tpc_hit-1)/4*ap.z,
+            kHitMarker, jet_layer, kHitSize, jet_color, jet->id());
+        // Draw a cone. Have the cone length depend on the particle momentum.
+        float cone_base = 50 + 20 * jet_pt;
+        float cone_height = 25 * ap.getP();
+        ced_cone_r_ID(cone_base, cone_height, ref_pt, rotate,
+            jet_layer, viewer_util::fromIntToRGBA(jet_color), jet->id());
       }
-      double center_c[3] = {0., 0., 0. };
-      double rotation_c[3] = { 0.,  v.theta()*180./M_PI , v.phi()*180./M_PI };
-      float rgba_color[4] = { float(0.2+0.2*i), float(0.2+0.2*i), float(1.0-0.25*i), float(0.3)};
-      if (i==0){
-        rgba_color[0] = 1.0;
-        rgba_color[1] = 0.3;
-        rgba_color[2] = 0.1;
-        rgba_color[3] = 0.3;
-      }
-      double scale_pt = 20;
-      double scale_mom = 25;
-      double min_pt = 50;
-      const double *pm=jet->getMomentum();
-      int i;
-      for(i=1;i<104;i++){
-        ced_line_ID((i-1)/4*pm[0], (i-1)/4*pm[1], (i-1)/4*pm[2], i/4*pm[0], i/4*pm[1], i/4*pm[2], layer, 1, viewer_util::fromRGBAToInt(rgba_color), jet->id());
-      }
-      ced_hit_ID((i-1)/4*pm[0], (i-1)/4*pm[1], (i-1)/4*pm[2],
-        0, layer, 2, viewer_util::fromRGBAToInt(rgba_color), jet->id()); //hauke
-      ced_cone_r_ID( min_pt + scale_pt*pt_norm , scale_mom*v.r() , center_c, rotation_c, layer, rgba_color,jet->id()); //hauke
     }
   }
-
 // My MC Particle addition:
 // Adapted from the Jet loop above.
-  streamlog_out(DEBUG) << " drawing MC from collection " << mc_col_name_ << std::endl ;
+  streamlog_out(DEBUG) << "Drawing MC from collection: " << mc_col_name_
+    << "." << std::endl ;
   EVENT::LCCollection* mc_col = nullptr;
   try {
     mc_col = event->getCollection(mc_col_name_);
@@ -396,18 +407,20 @@ void DDDSTViewer::processEvent(LCEvent* event) {
       << " is not available!" << std::endl;
   }
   if (mc_col) {
-    for (int j=0; j < mc_col->getNumberOfElements(); ++j) {
-      EVENT::MCParticle * mcp = dynamic_cast<EVENT::MCParticle*>(mc_col->getElementAt(j) );
-      // Only display the some of the MC particles. Also, define colors depending on the PDG.
-      int i_col = 0;
+    for (int j = 0; j < mc_col->getNumberOfElements(); ++j) {
+      EVENT::MCParticle* mcp = static_cast<EVENT::MCParticle*>(
+          mc_col->getElementAt(j));
+      // Only display the some of the MC particles.
+      // Also, define colors depending on the PDG.
+      int mc_color = kConeGray;
       int mc_layer = kMCOther;
       // Draw all primary MC particles (with special colors for Higgs and tau).
       if (mcp->getParents().size() == 0) {
         if(mcp->getPDG() == 25) {
-          i_col = 1;
+          mc_color = kConeGold;
           mc_layer = kMCHiggs;
         } else if(abs(mcp->getPDG()) == 15) {
-          i_col = 2;
+          mc_color = kConeGreen;
           mc_layer = kMCTau;
         // Tiny energy photons etc are not of interest.
         } else if(mcp->getEnergy() < 2) {
@@ -415,146 +428,83 @@ void DDDSTViewer::processEvent(LCEvent* event) {
         }
       // Draw the direct children of the Higgs.
       } else if (mcp->getParents()[0]->getPDG() == 25 && mcp->getPDG() != 25) {
-        i_col = 3;
+        mc_color = kConeViolet;
         mc_layer = kMCHiggsDecay;
       // Ignore all remaining MC particles.
       } else {
         continue;
       }
-      streamlog_out( DEBUG )  <<   "     - mcp energy " << mcp->getEnergy() << std::endl ;
-      const double * mom = mcp->getMomentum() ;
-      gear::Vector3D v( mom[0], mom[1] , mom[2] ) ;
-      //const EVENT::MCParticleVec & pv = mcp->getParticles();
-      float pt_norm = 0.0;
-      double center_c[3] = {0., 0., 0. };
-      double rotation_c[3] = { 0.,  v.theta()*180./M_PI , v.phi()*180./M_PI };
-      // This i was from the loop over mcp collections.
-      float rgba_color[4] = { float(0.2+0.2*i_col), float(0.2+0.2*i_col), float(1.0-0.25*i_col), float(0.3)};
-      if (i_col == 0) {
-        rgba_color[0] = 1.0;
-        rgba_color[1] = 0.3;
-        rgba_color[2] = 0.1;
-        rgba_color[3] = 0.3;
-      }
-      double scale_pt = 20;
-      double scale_mom = 25;
-      double min_pt = 50;
-      const double *pm=mcp->getMomentum();
-      int color = int(rgba_color[2]*(15*16+15)) + int(rgba_color[1]*(15*16+15))*16*16+ int(rgba_color[0]*(15*16+15))*16*16*16*16;
+      viewer_util::AnyParticle ap(mcp);
+      double ref_pt[3] = {0., 0., 0. };
+      double rotate[3] = {0., ap.getTheta()*180./M_PI, ap.getPhi()*180./M_PI};
       // Trajectory of the MC tracks is not necessary.
       // But we need a line for picking.
       int tpc_hit = 104;
-      for (int i = 1; i < tpc_hit; ++i) {
-        ced_line_ID((i-1)/4*pm[0], (i-1)/4*pm[1], (i-1)/4*pm[2],
-                  i/4*pm[0], i/4*pm[1], i/4*pm[2], mc_layer, 1, color, mcp->id());
+      for (int k = 1; k < tpc_hit; ++k) {
+        ced_line_ID((k-1)/4*ap.x, (k-1)/4*ap.y, (k-1)/4*ap.z,
+          k/4*ap.x, k/4*ap.y, k/4*ap.z,
+          mc_layer, kLineSize, mc_color, mcp->id());
       }
-      ced_hit_ID((tpc_hit-1)/4*pm[0], (tpc_hit-1)/4*pm[1], (tpc_hit-1)/4*pm[2],
-          0, mc_layer, 2, color, mcp->id());
-      // Draw a cone.
-      ced_cone_r_ID( min_pt + scale_pt*pt_norm , scale_mom*v.r() , center_c, rotation_c, mc_layer, rgba_color,mcp->id()); //hauke
+      ced_hit_ID((tpc_hit-1)/4*ap.x, (tpc_hit-1)/4*ap.y, (tpc_hit-1)/4*ap.z,
+          kHitMarker, mc_layer, kHitSize, mc_color, mcp->id());
+      // Draw a cone. Have the cone length depend on the particle momentum.
+      float cone_base = 20 + 2 * ap.getP();
+      float cone_height =   25 * ap.getP();
+      ced_cone_r_ID(cone_base, cone_height, ref_pt, rotate,
+          mc_layer, viewer_util::fromIntToRGBA(mc_color), mcp->id());
     }
   }
-  // This refreshes the view?
+// PandoraClusters.
+  std::string cluster_col_name = "PandoraClusters";
+  streamlog_out(DEBUG) << "Drawing clusters from collection: "
+      << cluster_col_name << "." << std::endl ;
+  EVENT::LCCollection* cluster_col = nullptr;
+  try {
+    rp_col = event->getCollection(cluster_col_name);
+  } catch (DataNotAvailableException &e) {
+    streamlog_out(ERROR) << "RP collection " << cluster_col_name
+      << " is not available!" << std::endl;
+  }
+  if (cluster_col) {
+    cluster_col->
+  }
   DDMarlinCED::draw(this, wait_for_keyboard_);
 }
 
-
-/**
- * PRELIM */
-int DDDSTViewer::returnTrackColor(int type) {
-
-  int kcol = 0x999999; //default black - unknown
-
-  if (type==211) 			kcol = 0x990000; //red - pi^+
-  else if (type==-211) 	kcol = 0x996600; //orange - pi^-
-  else if (type==22) 		kcol = 0x00ff00; //yellow - photon
-  else if (type==11) 		kcol = 0x660066; //dark blue - e^-
-  else if (type==-11) 	kcol = 0x660099; //violet - e^+
-  else if (type==2112)	kcol = 0x99FFFF; //white - n0
-  else if (type==-2112)	kcol = 0x99FFFF; //white n bar
-  else {
-    streamlog_out( DEBUG ) << "Unassigned type of colour: default" << std::endl;
+void DDDSTViewer::showLegendSpectrum(char scale, int color_map,
+    double en_min, double en_max, unsigned int ticks) {
+  // Legend colour matrix.
+  unsigned int** rgb_matrix = new unsigned int*[kColorSteps];
+  for (unsigned int i=0; i<kColorSteps; ++i){
+    rgb_matrix[i] = new unsigned int[3];  // To avoid seg fault.
+    ColorMap::selectColorMap(color_map)(rgb_matrix[i], i, 0.0, kColorSteps);
   }
-  return kcol;
+  ced_legend(en_min, en_max, kColorSteps, rgb_matrix, ticks, scale);
 }
 
-void DDDSTViewer::showLegendSpectrum(const unsigned int color_steps, char scale, int colorMap, float en_min, float en_max, unsigned int ticks){
-
-  const unsigned int numberOfColours = 3;
-  unsigned int** rgb_matrix = new unsigned int*[color_steps]; //legend colour matrix;
-
-  for (unsigned int i=0; i<color_steps; ++i){
-    rgb_matrix[i] = new unsigned int[numberOfColours];
-    ColorMap::selectColorMap(colorMap)(rgb_matrix[i], (float)i, 0.0, (float)color_steps);
-    //			std::cout << "----------------------" << std::endl;
-    //			std::cout << "i = " << i << std::endl;
-    //			std::cout << "red = " << rgb_matrix[i][0] << std::endl;
-    //			std::cout << "green = " << rgb_matrix[i][1] << std::endl;
-    //			std::cout << "blue = " << rgb_matrix[i][2] << std::endl;
-  }
-  ced_legend(en_min, en_max, color_steps, rgb_matrix, ticks, scale);
-}
-
-int DDDSTViewer::returnRGBClusterColor(float energy, float cutoff_min, float cutoff_max, int color_steps, char scale, int color_map){
+int DDDSTViewer::returnRGBClusterColor(double energy,
+    double cutoff_min, double cutoff_max, char scale, int color_map) {
   if (color_map < 0 || color_map > 6) {
     streamlog_out(ERROR) << "Wrong color_map parameter!" << std::endl;
   }
   // Implicit conversion of the double returned from the function to an int in
-  // the range of color_steps.
+  // the range of kColorSteps.
   int color_delta = viewer_util::convertScales(energy, cutoff_max, cutoff_min,
-    color_steps, 0, viewer_util::ScaleMapping(scale));
+    kColorSteps, 0, viewer_util::ScaleMapping(scale));
   unsigned int rgb[] = {0, 0, 0};
-  ColorMap::selectColorMap(color_map)(rgb, color_delta, 0, color_steps);
+  ColorMap::selectColorMap(color_map)(rgb, color_delta, 0, kColorSteps);
   int hex_color = ColorMap::RGB2HEX(rgb[0], rgb[1], rgb[2]);
   return hex_color;
 }
 
-
-
-int DDDSTViewer::returnClusterSize(float eneCluster, float cutoff_min, float cutoff_max){
-  if (cutoff_min > cutoff_max) {
-    streamlog_out(ERROR) << "cutoff_min < cutoff_max" << std::endl;
-  }
-  if (eneCluster < 0.0) {
-    streamlog_out(ERROR) << "eneCluster is negative!" << std::endl;
-  }
-  if (cutoff_min < 0.0) {
-    streamlog_out(ERROR) << "eneCluster is negative!" << std::endl;
-  }
-
-  int size = 0; //default size: zero
-
-		// sizes
-  int size_min = 10;
-  int size_max = 120;
-
-  // Input values in log-scale
-  float log_ene = std::log(eneCluster+1);
-  float log_min = std::log(cutoff_min+1);
-  float log_max = std::log(cutoff_max+1);
-
-  int size_steps = size_max - size_min; // default: 90 step sizes
-  float log_delta = log_max - log_min;
-  float log_step = log_delta/size_steps;
-
-  int size_delta = (int) ((log_ene-log_min)/log_step); // which size bin does the value go to?
-
-  if (size_delta >= size_steps){
-    size = size_max;
-  }
-  else if (size_delta < size_min){
-    size = size_min;
-  }
-  else {
-    size = size_min + size_delta;
-  }
-
-  /**
-   * Check the output */
-  if (size <=0){
-    std::cout << "Error in 'DDDSTViewer::returnClusterSize': return size is negative!" << std::endl;
-  }
-  return size;
+double DDDSTViewer::returnClusterSize(double en_cluster,
+     double cutoff_min, double cutoff_max) {
+  // None-zero to ensure visibility of small clusters.
+  int clu_size_min = 10;
+  // Not related to the energy scale of the event, but the size of the ECAL.
+  int clu_size_max = 120;
+  return viewer_util::convertScales(en_cluster, cutoff_max, cutoff_min,
+    clu_size_max, clu_size_min, viewer_util::ScaleMapping(kScale));
 }
 
 int DDDSTViewer::returnIpLayer(std::string jet_col_name) {
@@ -589,52 +539,59 @@ int DDDSTViewer::returnJetLayer(std::string jet_col_name) {
   return layer;
 }
 
-int DDDSTViewer::addAlphaChannelToColor(int color, int alpha_channel){
-  int rgba = 0xEE000000;
-  rgba = (alpha_channel<<24) + color;
-  return rgba;
+int DDDSTViewer::addTransparencyToColor(int color, int transparency) {
+  return (transparency<<24) + color;
 }
 
-int DDDSTViewer::returnJetColor(std::string jet_col_name, int col_number) {
-  int white = 0x55555555;
-  int black = 0x55000000;
-  int red = 0x55550000;
-  int green = 0x55008000;
-  int yellow = 0x55555500;
-  int fuchsia = 0x55550055;
-  //int blue = 0x55000055;
-  //int orange = 0x5555a500;
-  //int violet = 0x55ee82ee;
-  //int purple = 0x55800080;
-  //int silver = 0x55c0c0c0;
-  //int gold = 0x5555d700;
-  //int gray = 0x55808080;
-  //int aqua = 0x55005555;
-  //int skyblue = 0x5587ceeb;
-  //int lightblue = 0x55a558e6;
-  //int khaki = 0x55f0e68c;
-  // Assign the color based on the index in the parameter JetCollections in
-  // the steering file.
-  int color = 0x00000000;
+enum TrackColor {
+  kTrackBlack    = 0x999999,
+  kTrackRed      = 0x990000,
+  kTrackOrange   = 0x996600,
+  kTrackYellow   = 0x00ff00,
+  kTrackDarkBlue = 0x660066,
+  kTrackViolet   = 0x660099,
+  kTrackWhite    = 0x99FFFF,
+};
+
+int DDDSTViewer::returnTrackColor(int particle_type) {
+  switch (particle_type) {
+    case   211:  // Pion+.
+      return kTrackRed;
+    case  -211:  // Pion-.
+      return kTrackOrange;
+    case    22:  // Photon.
+      return kTrackYellow;
+    case    11:  // Electron.
+      return kTrackDarkBlue;
+    case   -11:  // Positron.
+      return kTrackViolet;
+    case  2112:  // Neutron.
+      return kTrackWhite;
+    case -2112:  // Anti-neutron.
+      return kTrackWhite;
+    default:
+      streamlog_out(DEBUG) << "Unconsidered particle type " << particle_type
+      << ". A default color is chosen." << std::endl;
+      return kTrackBlack;
+  }
+}
+
+int DDDSTViewer::returnJetColor(int col_number) {
+  int transparency = 0x66;
   switch (col_number) {
   case 0:
-    color = yellow;
-    break;
+    return addTransparencyToColor(kConeYellow, transparency);
   case 1:
-    color = red;
-    break;
+    return addTransparencyToColor(kConeRed, transparency);
   case 2:
-    color = white;
-    break;
+    return addTransparencyToColor(kConeWhite, transparency);
   case 3:
-    color = fuchsia;
-    break;
+    return addTransparencyToColor(kConeFuchsia, transparency);
   case 4:
-    color = black;
-    break;
+    return addTransparencyToColor(kConeBlack, transparency);
   case 5:
-    color = green;
-    break;
+    return addTransparencyToColor(kConeGreen, transparency);
+  default:
+    return addTransparencyToColor(kConeBlue, transparency);
   }
-  return color;
 }

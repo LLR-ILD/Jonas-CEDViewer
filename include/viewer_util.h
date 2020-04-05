@@ -38,6 +38,9 @@ struct CalorimeterDrawParams {
   double delta_z;
 };
 
+// Get the relevant calorimeter parameters for track length calculations.
+CalorimeterDrawParams getCalorimeterParameters(dd4hep::Detector& the_detector,
+    std::string name, bool self_call = false);
 // ----------------------------------------------------------------------------
 // dd4hep draw helpers.
 
@@ -46,10 +49,6 @@ double* getTrackerExtent(dd4hep::Detector& the_detector);
 
 // Get the outer extents of the yoke.
 double* getYokeExtent(dd4hep::Detector& the_detector);
-
-// Get the relevant calorimeter parameters for track length calculations.
-CalorimeterDrawParams getCalorimeterParameters(dd4hep::Detector& the_detector,
-    std::string name, bool self_call = false);
 
 // It suffices to perform the calculations in the first quadrant due to the
 // detector's symmetry.
@@ -61,8 +60,11 @@ double calculateTrackLength(std::string type, dd4hep::Detector& the_detector,
 
 // Facilitate simple particle arithmetics.
 struct AnyParticle {
-  double E, x, y, z;
-  int charge;
+  double E = 0;
+  double x = 0;
+  double y = 0;
+  double z = 0;
+  int charge = 0;
   AnyParticle() {E = x = y = z = charge = 0;}
   AnyParticle(EVENT::ReconstructedParticle* rp) {
     const double* p = rp->getMomentum();
@@ -87,11 +89,18 @@ struct AnyParticle {
   double getP() {
     return sqrt(x*x + y*y + z*z);
   }
+  double getTheta() {
+    return atan(sqrt(x*x + y*y) / z);
+  }
+  double getPhi() {
+    return atan2(y, x);
+  }
 };
 // ----------------------------------------------------------------------------
 // Functionality related to color.
 
 int fromRGBAToInt(float* rgba_color);
+float* fromIntToRGBA(int hex_value);
 
 enum ScaleMapping {
   kLinear = 'b',
@@ -101,7 +110,7 @@ enum ScaleMapping {
 // Convert the value laying inside the old scale to a value in a new scale,
 // possibly with a non-linear mapping.
 // Useful e.g. for conversion of an energy value to a color scale.
-double viewer_util::convertScales(double value, double old_max, double old_min,
+double convertScales(double value, double old_max, double old_min,
     double new_max, double new_min=0, ScaleMapping conv=kLog);
 }  // namespace viewer_util
 
