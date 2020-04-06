@@ -171,6 +171,22 @@ DDDSTViewer::DDDSTViewer() : Processor("DDDSTViewer") {
     "Energy threshold to divide between low and high energy drawing.",
     e_draw_cut_,
     (double) 0.0);
+
+  // Add drawing related options.
+  StringVec detailled_surfaces_example{};
+  // detailled_surfaces_example.push_back("NameToBeDrawnDetailled");
+  registerProcessorParameter(
+    "DetailledDrawing" ,
+    "List of detector names to be printed in more detail.",
+    detailled_drawn_detector_surfaces_,
+    detailled_surfaces_example,
+    1);
+  registerProcessorParameter(
+    "DrawSurfaces",
+    "Draw the geometry as a set of individual surfaces (if available) instead "
+    "of simplified structures.",
+    is_drawn_surfaces_,
+    false);
 }
 
 void DDDSTViewer::init() {
@@ -193,7 +209,8 @@ void DDDSTViewer::processEvent(LCEvent* event) {
   // For now, we opt to draw the geometry as simplified structures instead of
   // individual surfaces. The list of detector names to draw in more detail is
   // empty.
-  DDMarlinCED::drawDD4hepDetector(the_detector, false, StringVec{});
+  DDMarlinCED::drawDD4hepDetector(the_detector, is_drawn_surfaces_,
+      detailled_drawn_detector_surfaces_);
   DDCEDPickingHandler &p_handler = DDCEDPickingHandler::getInstance();
   p_handler.update(event);
 // Drawing the reconstructed particles.

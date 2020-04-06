@@ -36,6 +36,8 @@ class DDDSTViewer : public Processor {
   StringVec  jet_col_names_{};
   int wait_for_keyboard_{};
   double e_draw_cut_{};
+  StringVec detailled_drawn_detector_surfaces_{};
+  bool is_drawn_surfaces_ = false;
   // -- Additional constants.
   int n_run_ = 0;
   int n_event_ = 0;
