@@ -223,8 +223,8 @@ void wrapperDrawDD4hepDetector(dd4hep::Detector& the_detector,
 
 void DDDSTViewer::processEvent(LCEvent* event) {
   n_event_ = event->getEventNumber();
-  streamlog_out(DEBUG) << "Processing event no " << n_event_
-    << " - run " << n_run_ << std::endl;
+  streamlog_out(DEBUG) << "  Processing event no " << n_event_
+    << " - run " << n_run_ << std::endl << std::endl;
   DDMarlinCED::newEvent(this, event);
   writeLayerDescription();
   // Get the detector instance (now dd4hep, replaced gear).
@@ -236,8 +236,13 @@ void DDDSTViewer::processEvent(LCEvent* event) {
       detailled_drawn_detector_surfaces_);
   DDCEDPickingHandler &p_handler = DDCEDPickingHandler::getInstance();
   p_handler.update(event);
+  // Add a line to disentangle DD4hep output from output actually added by this
+  // processor itself.
+  streamlog_out(MESSAGE) << std::endl
+    << "-------------------------------------------------" << std::endl
+    << std::endl;
 // Drawing the reconstructed particles.
-  streamlog_out(DEBUG) << "Drawing RPs from collection: "
+  streamlog_out(DEBUG) << "  Drawing RPs from collection: "
       << rp_col_name_ << "." << std::endl ;
   EVENT::LCCollection* rp_col = nullptr;
   try {
@@ -311,7 +316,7 @@ void DDDSTViewer::processEvent(LCEvent* event) {
         }
         // for particles centered at the origin
         if (ref_pt != std::vector<double>{0, 0, 0}){
-          streamlog_out(DEBUG3)	<< "This is not yet implemented. The rotation "
+          streamlog_out(WARNING) << "This is not yet implemented. The rotation "
             "operation so far is based on the reference point of the track "
             "being the center of the detector." << std::endl;
           return;
@@ -376,18 +381,18 @@ void DDDSTViewer::processEvent(LCEvent* event) {
     showLegendSpectrum(kScale, kJetColorMap, kEnMin, kEnMax, n_ticks);
     streamlog_out(MESSAGE) << std::endl
       << "Total Energy and Momentum Balance of Event" << std::endl
-      << "Energy  = " << ev_sum.E
-      << " PX     = " << ev_sum.x
-      << " PY     = " << ev_sum.y
-      << " PZ     = " << ev_sum.z
-      << " Charge = " << ev_sum.charge << std::endl << std::endl ;
-    streamlog_out(DEBUG2) << "Setup properties: " << std::endl
-      << "B-Field = " << b_field_z << " T." << std::endl ;
+      << "  Energy = " << ev_sum.E
+      << "  Charge = " << ev_sum.charge << std::endl
+      << "  PX     = " << ev_sum.x
+      << "  PY     = " << ev_sum.y
+      << "  PZ     = " << ev_sum.z << std::endl << std::endl;
+    streamlog_out(DEBUG) << "  Setup properties: " << std::endl
+      << "    B-Field = " << b_field_z << " T." << std::endl << std::endl;
   }
 
 // Now we draw the jets (if any ).
   for (size_t i_col = 0; i_col < jet_col_names_.size(); ++i_col) {
-    streamlog_out(DEBUG) << "Drawing jets from collection: "
+    streamlog_out(DEBUG) << "  Drawing jets from collection: "
       << jet_col_names_[i_col] << "." << std::endl ;
     EVENT::LCCollection* jet_col = nullptr;
     try {
@@ -439,8 +444,8 @@ void DDDSTViewer::processEvent(LCEvent* event) {
   }
 // My MC Particle addition:
 // Adapted from the Jet loop above.
-  streamlog_out(DEBUG) << "Drawing MC from collection: " << mc_col_name_
-    << "." << std::endl ;
+  streamlog_out(DEBUG) << "  Drawing MC from collection: " << mc_col_name_
+    << "." << std::endl;
   EVENT::LCCollection* mc_col = nullptr;
   try {
     mc_col = event->getCollection(mc_col_name_);
@@ -605,7 +610,7 @@ int DDDSTViewer::returnTrackColor(int particle_type) {
     case -2112:  // Anti-neutron.
       return kTrackWhite;
     default:
-      streamlog_out(DEBUG) << "Unconsidered particle type " << particle_type
+      streamlog_out(DEBUG) << "  Unconsidered particle type " << particle_type
       << ". A default color is chosen." << std::endl;
       return kTrackBlack;
   }
