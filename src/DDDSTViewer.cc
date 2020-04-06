@@ -6,6 +6,7 @@
 // -- C++ STL headers.
 
 // -- ROOT headers.
+#include "TError.h"
 
 // -- LCIO headers.
 ////#include "EVENT/MCParticle.h"
@@ -198,6 +199,28 @@ void DDDSTViewer::processRunHeader(LCRunHeader* run) {
   n_run_ = run->getRunNumber();
 }
 
+/**
+ *  Mute annoying ROOT TColor warning.
+ *
+ * There is a ROOT TColor warning printed for each detector element in each
+ * event, polluting the output. This is from the way the color of a detector
+ * element is initialized in the DDMarlinCED class of the MarlinUtil package.
+ * In the `getVisAttributes` method, the TColor initializer is (knowingly)
+ * used on already existing color ids, to return their rgb values.
+ * I assume this warning was added to TColor later than the time of writing of
+ * DDMarlinCED. To avoid touching/personalizing the MarlinUtil package on top,
+ * the following wrapper is utilized.
+ * Quick and dirty, probably temporary fix.
+ **/
+void wrapperDrawDD4hepDetector(dd4hep::Detector& the_detector,
+    bool is_drawn_surfaces_, StringVec detailled_drawn_detector_surfaces_) {
+  Int_t old_root_error_ignore_level = gErrorIgnoreLevel;
+  gErrorIgnoreLevel = kFatal;
+  DDMarlinCED::drawDD4hepDetector(the_detector, is_drawn_surfaces_,
+      detailled_drawn_detector_surfaces_);
+  gErrorIgnoreLevel = old_root_error_ignore_level;
+}
+
 void DDDSTViewer::processEvent(LCEvent* event) {
   n_event_ = event->getEventNumber();
   streamlog_out(DEBUG) << "Processing event no " << n_event_
@@ -209,7 +232,7 @@ void DDDSTViewer::processEvent(LCEvent* event) {
   // For now, we opt to draw the geometry as simplified structures instead of
   // individual surfaces. The list of detector names to draw in more detail is
   // empty.
-  DDMarlinCED::drawDD4hepDetector(the_detector, is_drawn_surfaces_,
+  wrapperDrawDD4hepDetector(the_detector, is_drawn_surfaces_,
       detailled_drawn_detector_surfaces_);
   DDCEDPickingHandler &p_handler = DDCEDPickingHandler::getInstance();
   p_handler.update(event);
