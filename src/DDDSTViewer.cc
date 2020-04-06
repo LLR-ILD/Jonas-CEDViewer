@@ -13,6 +13,7 @@
 ////#include "EVENT/ReconstructedParticle.h"
 
 // -- Marlin headers.
+#include "marlin/Exceptions.h"
 ////#include "ClusterShapes.h"
 ////#include "HelixClass.h"
 
@@ -165,13 +166,21 @@ DDDSTViewer::DDDSTViewer() : Processor("DDDSTViewer") {
     "WaitForKeyboard",
     "Wait for Keyboard before proceed.",
     wait_for_keyboard_,
-    1);
+    true);
 
   registerProcessorParameter(
     "EDrawCut",
     "Energy threshold to divide between low and high energy drawing.",
     e_draw_cut_,
     (double) 0.0);
+
+  IntVec default_h_decays{};  // The default choice is empty -> draw all events.
+  registerProcessorParameter(
+    "HiggsDecays",
+    "If non-empty: List of MC Higgs decays for which the event is drawn."
+    "Knows: 3 4 5 13 15 21 22 23 24 (c s b mu tau gluon photon Z W).",
+    use_h_decays_,
+    default_h_decays);
 
   // Add drawing related options.
   StringVec detailled_surfaces_example{};
@@ -182,6 +191,7 @@ DDDSTViewer::DDDSTViewer() : Processor("DDDSTViewer") {
     detailled_drawn_detector_surfaces_,
     detailled_surfaces_example,
     1);
+
   registerProcessorParameter(
     "DrawSurfaces",
     "Draw the geometry as a set of individual surfaces (if available) instead "
@@ -225,6 +235,9 @@ void DDDSTViewer::processEvent(LCEvent* event) {
   n_event_ = event->getEventNumber();
   streamlog_out(DEBUG) << "  Processing event no " << n_event_
     << " - run " << n_run_ << std::endl << std::endl;
+  if (skipUnwantedHiggsDecay(use_h_decays_, mc_col_name_, event)) {
+    throw marlin::SkipEventException(this);
+  }
   DDMarlinCED::newEvent(this, event);
   writeLayerDescription();
   // Get the detector instance (now dd4hep, replaced gear).
@@ -634,4 +647,35 @@ int DDDSTViewer::returnJetColor(int col_number) {
   default:
     return addTransparencyToColor(kConeBlue, transparency);
   }
+}
+
+bool DDDSTViewer::skipUnwantedHiggsDecay(
+    IntVec h_decays_to_draw, std::string mc_col_name, EVENT::LCEvent* event) {
+  if (h_decays_to_draw.size() == 0) return false;
+  std::cout << "ENTER";
+  EVENT::LCCollection* mc_col = nullptr;
+  try {
+    mc_col = event->getCollection(mc_col_name);
+  } catch (DataNotAvailableException &e) {
+    streamlog_out(ERROR) << "MC collection " << mc_col_name
+      << " is not available!" << std::endl;
+  }
+  if (mc_col) {
+    for (int j = 0; j < mc_col->getNumberOfElements(); ++j) {
+      EVENT::MCParticle* mcp = static_cast<EVENT::MCParticle*>(
+          mc_col->getElementAt(j));
+      if (mcp->getParents().size() != 1) continue;
+      if (mcp->getParents()[0]->getPDG() == 25 && mcp->getPDG() != 25) {
+        for (auto pdg_to_use : h_decays_to_draw) {
+          std::cout << pdg_to_use;
+          if (mcp->getPDG() == pdg_to_use) return false;
+        }
+      }
+    }
+    // The only place for which true should be returned: The MC collection
+    // exists, Higgs decay modes are specified, but the event does not have one
+    // of the required decay modes.
+    return true;
+  }
+  return false;
 }

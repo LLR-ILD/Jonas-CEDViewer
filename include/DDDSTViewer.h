@@ -34,8 +34,9 @@ class DDDSTViewer : public Processor {
   std::string rp_col_name_{};
   std::string mc_col_name_{};
   StringVec  jet_col_names_{};
-  int wait_for_keyboard_{};
+  bool wait_for_keyboard_{};
   double e_draw_cut_{};
+  IntVec use_h_decays_{};
   StringVec detailled_drawn_detector_surfaces_{};
   bool is_drawn_surfaces_ = false;
   // -- Additional constants.
@@ -43,6 +44,8 @@ class DDDSTViewer : public Processor {
   int n_event_ = 0;
   // -- Additional member functions.
   void writeLayerDescription(void);
+  bool skipUnwantedHiggsDecay(IntVec h_decays_to_draw, std::string mc_col_name,
+      EVENT::LCEvent* event);
   int returnTrackColor(int particle_type);
   void showLegendSpectrum(char scale, int color_map,
       double ene_min, double ene_max, unsigned int ticks);
