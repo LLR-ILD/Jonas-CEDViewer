@@ -8,16 +8,16 @@
 // -- ROOT headers.
 
 // -- LCIO headers.
-#include "EVENT/MCParticle.h"
-#include "EVENT/ReconstructedParticle.h"
+////#include "EVENT/MCParticle.h"
+////#include "EVENT/ReconstructedParticle.h"
 
 // -- Marlin headers.
 ////#include "ClusterShapes.h"
 ////#include "HelixClass.h"
 
 // -- Includes for detector drawing.
-#include "DD4hep/DD4hepUnits.h"
-#include "DD4hep/Detector.h"
+////#include "DD4hep/DD4hepUnits.h"
+////#include "DD4hep/Detector.h"
 #include "DDMarlinCED.h"
 
 // -- Header for this processor and other project-specific headers.
@@ -186,7 +186,7 @@ void DDDSTViewer::processEvent(LCEvent* event) {
   n_event_ = event->getEventNumber();
   streamlog_out(DEBUG) << "Processing event no " << n_event_
     << " - run " << n_run_ << std::endl;
-  DDMarlinCED::newEvent(this);
+  DDMarlinCED::newEvent(this, event);
   writeLayerDescription();
   // Get the detector instance (now dd4hep, replaced gear).
   dd4hep::Detector& the_detector = dd4hep::Detector::getInstance();
@@ -332,7 +332,7 @@ void DDDSTViewer::processEvent(LCEvent* event) {
         ////}
       }
     }
-    unsigned int n_ticks = 6; //middle
+    unsigned int n_ticks = 6;
     showLegendSpectrum(kScale, kJetColorMap, kEnMin, kEnMax, n_ticks);
     streamlog_out(MESSAGE) << std::endl
       << "Total Energy and Momentum Balance of Event" << std::endl
@@ -390,8 +390,10 @@ void DDDSTViewer::processEvent(LCEvent* event) {
         // Draw a cone. Have the cone length depend on the particle momentum.
         float cone_base = 50 + 20 * jet_pt;
         float cone_height = 25 * ap.getP();
+        float rgba_jet_color[4];
+        viewer_util::fromIntToRGBA(jet_color, rgba_jet_color);
         ced_cone_r_ID(cone_base, cone_height, ref_pt, rotate,
-            jet_layer, viewer_util::fromIntToRGBA(jet_color), jet->id());
+            jet_layer, rgba_jet_color, jet->id());
       }
     }
   }
@@ -450,23 +452,11 @@ void DDDSTViewer::processEvent(LCEvent* event) {
       // Draw a cone. Have the cone length depend on the particle momentum.
       float cone_base = 20 + 2 * ap.getP();
       float cone_height =   25 * ap.getP();
+      float rgba_jet_color[4];
+      viewer_util::fromIntToRGBA(mc_color, rgba_jet_color);
       ced_cone_r_ID(cone_base, cone_height, ref_pt, rotate,
-          mc_layer, viewer_util::fromIntToRGBA(mc_color), mcp->id());
+          mc_layer, rgba_jet_color, mcp->id());
     }
-  }
-// PandoraClusters.
-  std::string cluster_col_name = "PandoraClusters";
-  streamlog_out(DEBUG) << "Drawing clusters from collection: "
-      << cluster_col_name << "." << std::endl ;
-  EVENT::LCCollection* cluster_col = nullptr;
-  try {
-    rp_col = event->getCollection(cluster_col_name);
-  } catch (DataNotAvailableException &e) {
-    streamlog_out(ERROR) << "RP collection " << cluster_col_name
-      << " is not available!" << std::endl;
-  }
-  if (cluster_col) {
-    cluster_col->
   }
   DDMarlinCED::draw(this, wait_for_keyboard_);
 }
@@ -547,7 +537,8 @@ enum TrackColor {
   kTrackBlack    = 0x999999,
   kTrackRed      = 0x990000,
   kTrackOrange   = 0x996600,
-  kTrackYellow   = 0x00ff00,
+  kTrackYellow   = 0xffff00,
+  kTrackGreen    = 0x00ff00,
   kTrackDarkBlue = 0x660066,
   kTrackViolet   = 0x660099,
   kTrackWhite    = 0x99FFFF,
@@ -565,6 +556,10 @@ int DDDSTViewer::returnTrackColor(int particle_type) {
       return kTrackDarkBlue;
     case   -11:  // Positron.
       return kTrackViolet;
+    case    13:  // Muon.
+      return kTrackGreen;
+    case   -13:  // Anti-muon.
+      return kTrackGreen;
     case  2112:  // Neutron.
       return kTrackWhite;
     case -2112:  // Anti-neutron.

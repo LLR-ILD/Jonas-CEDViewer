@@ -100,7 +100,7 @@ struct AnyParticle {
 // Functionality related to color.
 
 int fromRGBAToInt(float* rgba_color);
-float* fromIntToRGBA(int hex_value);
+void fromIntToRGBA(int hex_value, float (&rgba)[4]);
 
 enum ScaleMapping {
   kLinear = 'b',

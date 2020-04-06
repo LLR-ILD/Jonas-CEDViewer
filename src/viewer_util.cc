@@ -143,8 +143,8 @@ double viewer_util::calculateTrackLength(std::string type,
     kEndcapOnly,
     kThroughEndcapReachesYoke,
   };
-  double length;
-  TrackThroughCalos track_through;
+  double length = -1;
+  TrackThroughCalos track_through = kEndsInBarrel;
   // Direction: Traverses only barrel.
   if (pt_over_pz > (dist_to_barrel_r + barrel.delta_r) / dist_to_barrel_z) {
     track_through = kEndsInBarrel;
@@ -211,13 +211,11 @@ int viewer_util::fromRGBAToInt(float* rgba_color) {
        + int(rgba_color[0]*(15*16+15))*16*16*16*16;
 }
 
-float* viewer_util::fromIntToRGBA(int hex_value) {
-  float rgba[4];
-  rgba[0] = ((hex_value >> 32) & 0xFF) / 255.0;  // Extract the transparency.
+void viewer_util::fromIntToRGBA(int hex_value, float (&rgba)[4]) {
+  rgba[0] = ((hex_value >> 24) & 0xFF) / 255.0;  // Extract the transparency.
   rgba[1] = ((hex_value >> 16) & 0xFF) / 255.0;  // Extract the RR byte.
   rgba[2] = ((hex_value >> 8)  & 0xFF) / 255.0;  // Extract the GG byte.
   rgba[3] = ((hex_value)       & 0xFF) / 255.0;  // Extract the BB byte.
-  return rgba;
 }
 
 // Convert the value laying inside the old scale to a value in a new scale,
