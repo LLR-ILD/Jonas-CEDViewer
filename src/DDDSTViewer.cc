@@ -51,22 +51,21 @@ enum ColorMaps {
 };
 
 enum ConeColor {
-  kConeWhite     = 0x555555,
+  kConeWhite     = 0x99ffff,
   kConeBlack     = 0x000000,
-  kConeRed       = 0x550000,
-  kConeGreen     = 0x008000,
-  kConeYellow    = 0x555500,
-  kConeFuchsia   = 0x550055,
-  kConeBlue      = 0x000055,
-  kConeOrange    = 0x55a500,
-  kConeViolet    = 0xee82ee,
+  kConeRed       = 0xdd0000,
+  kConeGreen     = 0x00dd00,
+  kConeYellow    = 0xdddd00,
+  kConeFuchsia   = 0xdd00dd,
+  kConeBlue      = 0x0000dd,
+  kConeDarkBlue  = 0x000066,
+  kConeOrange    = 0xff9900,
+  kConePink      = 0xee82ee,
+  kConeViolet    = 0x660099,
   kConePurple    = 0x800080,
   kConeSilver    = 0xc0c0c0,
-  kConeGold      = 0x55d700,
   kConeGray      = 0x808080,
-  kConeAqua      = 0x005555,
   kConeSkyBlue   = 0x87ceeb,
-  kConeLightBlue = 0xa558e6,
   kConeKhaki     = 0xf0e68c,
 };
 
@@ -297,18 +296,18 @@ void DDDSTViewer::processEvent(LCEvent* event) {
     // Two kinds of objects should be drawn for each reconstructed particle:
     // The track (in the case of charged RPs) and the cluster.
     // Lets start with the track.
-      int track_color = returnTrackColor(rp->getType());
+      viewer_util::DSTColor track_color = returnTrackColor(rp->getType());
       DDMarlinCED::drawHelix(b_field_z, ap.charge,
           ref_pt[0], ref_pt[1], ref_pt[2],
           ap.x, ap.y, ap.z, tpc_layer,
-          kHelixSize, track_color,
+          kHelixSize, track_color.hexa(),
           helix_min_r, helix_max_r, helix_max_z, rp->id());
       // For the momentum lines, both length and color are momentum dependent.
-      int mom_line_color = returnRGBClusterColor(ap.getP(), kEnMin, kEnMax,
-          kScale, kColdColorMap);
+      viewer_util::DSTColor mom_line_color = returnRGBClusterColor(
+          ap.getP(), kEnMin, kEnMax, kScale, kColdColorMap);
       ced_line_ID(ref_pt[0], ref_pt[1], ref_pt[2],
           kMomScale*ap.x, kMomScale*ap.y, kMomScale*ap.z, mom_layer,
-          kLineSize, mom_line_color, rp->id());
+          kLineSize, mom_line_color.hexa(), rp->id());
     // Now the clusters.
       if (rp->getClusters().size() > 0) {
         // Only draw a single cluster per particle.
@@ -338,29 +337,30 @@ void DDDSTViewer::processEvent(LCEvent* event) {
         float en_cluster = cluster->getEnergy();
         double cl_scale = returnClusterSize(en_cluster, kEnMin, kEnMax);
         double cl_size[] = {cl_scale, cl_scale, 4*cl_scale};
-        int color = returnRGBClusterColor(en_cluster, kEnMin, kEnMax, kScale,
-            kJetColorMap);
+        viewer_util::DSTColor clu_color = returnRGBClusterColor(
+            en_cluster, kEnMin, kEnMax, kScale, kJetColorMap);
         if (true) {   // Enables picking (and adds the small hit dot).
           ced_hit_ID(center_d[0], center_d[1], center_d[2], kHitMarker,
-            hit_layer, (int)(sqrt(2)*cl_size[0]/4), color, cluster->id());
+              hit_layer, (int)(sqrt(2)*cl_size[0]/4),
+              clu_color.hexa(), cluster->id());
         }
         if (true) {  // 3 2D ellipses of the cluster extend.
-          int rgba = addTransparencyToColor(color, 0x66);
+          clu_color.setAlpha(0x88);
           ced_cluellipse_r_ID((float) cl_size[0], (float) cl_size[2],
-              center_f, rotate,
-              clu_layer, rgba, cluster->id());  // Originally: BACKUP_LAYER.
+              center_f, rotate, clu_layer, clu_color.hexa(),
+              cluster->id());  // Originally: BACKUP_LAYER.
         }
         if (true) {  // A filled ellipse. Combined with the previous draw, this
         // creates a nice ellipsoid (3D).
-          int rgba = addTransparencyToColor(color, 0xCC);
-          ced_ellipsoid_r_ID(cl_size, center_d, rotate,
-              clu_layer, rgba, cluster->id());  // Originally: BACKUP_LAYER2.
+          clu_color.setAlpha(0xCC);
+          ced_ellipsoid_r_ID(cl_size, center_d, rotate, clu_layer,
+              clu_color.hexa(), cluster->id());  // Originally: BACKUP_LAYER2.
         }
         ////if (false) {  // Sides of a barrel around the ellipsoid (visual aid for
         ////// the cluster direction). I don't think it's nice.
         ////  int cylinder_sides = 30;
         ////  ced_geocylinder_r(cl_size[0]/2, cl_size[2], center_d, rotate,
-        ////      cylinder_sides, color, clu_layer);
+        ////      cylinder_sides, clu_color.hexa(), clu_layer);
         ////}
         ////if (false) {  // A line with arrow. For what, I don't know.
         //// // The line.
@@ -377,16 +377,14 @@ void DDDSTViewer::processEvent(LCEvent* event) {
         ////  float z_end = center_f[2] + (l_length - arrow_length) * clu_dir[2];
         ////  ced_line_ID(center_f[0], center_f[1], center_f[2],
         ////      x_end, y_end, z_end, clu_layer,  // Originally: CLU_LAYER.
-        ////      l_width, color, cluster->id());
+        ////      l_width, clu_color.hexa(), cluster->id());
         //// // The direction arrow.
-        ////  // Have the arrow colored a bit differently (greener). DOn't see why..
-        ////  int color_arrow = color + 0x009900;
         ////  float x_arrow = center_f[0] + (l_length) * clu_dir[0];
         ////  float y_arrow = center_f[1] + (l_length) * clu_dir[1];
         ////  float z_arrow = center_f[2] + (l_length) * clu_dir[2];
         ////  ced_line_ID(x_end, y_end, z_end,
         ////      x_arrow, y_arrow, z_arrow, clu_layer,  // Originally: CLU_LAYER.
-        ////      l_width, color_arrow, cluster->id());
+        ////      l_width, clu_color.hexa(), cluster->id());
         ////}
       }
     }
@@ -430,28 +428,29 @@ void DDDSTViewer::processEvent(LCEvent* event) {
           double mom_transvers_to_jet = pp.getP()
               - (pp.x*ap.x + pp.y*ap.y + pp.z*ap.z) / sqrt(ap.getP());
           jet_pt += mom_transvers_to_jet;
-          int part_color = returnJetColor(i_elem);
+          viewer_util::DSTColor part_color = returnJetColor(i_elem);
           int layer_ip = returnIpLayer(jet_col_names_[i_col]);;
           ced_line_ID(ref_pt[0], ref_pt[1], ref_pt[2],
               kMomScale*pp.x, kMomScale*pp.y, kMomScale*pp.z,
-              layer_ip, kLineSize, part_color, rp_vec[i_part]->id());
+              layer_ip, kLineSize, part_color.hexa(), rp_vec[i_part]->id());
         }
-        int jet_color = returnJetColor(i_elem);
+        viewer_util::DSTColor jet_color = returnJetColor(i_elem);
         int tpc_hit = 104;
         for (int k = 1; k < tpc_hit; ++k) {
           ced_line_ID((k-1)/4*ap.x, (k-1)/4*ap.y, (k-1)/4*ap.z,
             k/4*ap.x, k/4*ap.y, k/4*ap.z,
-            jet_layer, kLineSize, jet_color, jet->id());
+            jet_layer, kLineSize, jet_color.hexa(), jet->id());
         }
         ced_hit_ID((tpc_hit-1)/4*ap.x, (tpc_hit-1)/4*ap.y, (tpc_hit-1)/4*ap.z,
-            kHitMarker, jet_layer, kHitSize, jet_color, jet->id());
+            kHitMarker, jet_layer, kHitSize, jet_color.hexa(), jet->id());
         // Draw a cone. Have the cone length depend on the particle momentum.
         float cone_base = 50 + 20 * jet_pt;
         float cone_height = 25 * ap.getP();
-        float rgba_jet_color[4];
-        viewer_util::fromIntToRGBA(jet_color, rgba_jet_color);
+        float jet_color_rgba[4];
+        jet_color.setAlpha(0x33);
+        jet_color.update_rgba(jet_color_rgba);
         ced_cone_r_ID(cone_base, cone_height, ref_pt, rotate,
-            jet_layer, rgba_jet_color, jet->id());
+            jet_layer, jet_color_rgba, jet->id());
       }
     }
   }
@@ -472,15 +471,15 @@ void DDDSTViewer::processEvent(LCEvent* event) {
           mc_col->getElementAt(j));
       // Only display the some of the MC particles.
       // Also, define colors depending on the PDG.
-      int mc_color = kConeGray;
+      viewer_util::DSTColor mc_color = kConeBlue;
       int mc_layer = kMCOther;
       // Draw all primary MC particles (with special colors for Higgs and tau).
       if (mcp->getParents().size() == 0) {
         if(mcp->getPDG() == 25) {
-          mc_color = kConeGold;
+          mc_color.setHexa(kConeGray);
           mc_layer = kMCHiggs;
         } else if(abs(mcp->getPDG()) == 15) {
-          mc_color = kConeGreen;
+          mc_color.setHexa(kConeGreen);
           mc_layer = kMCTau;
         // Tiny energy photons etc are not of interest.
         } else if(mcp->getEnergy() < 2) {
@@ -488,8 +487,9 @@ void DDDSTViewer::processEvent(LCEvent* event) {
         }
       // Draw the direct children of the Higgs.
       } else if (mcp->getParents()[0]->getPDG() == 25 && mcp->getPDG() != 25) {
-        mc_color = kConeViolet;
+        mc_color.setHexa(kConeViolet);
         mc_layer = kMCHiggsDecay;
+        streamlog_out(MESSAGE) << "H -> " << mcp->getPDG() << "." << std::endl;
       // Ignore all remaining MC particles.
       } else {
         continue;
@@ -503,17 +503,18 @@ void DDDSTViewer::processEvent(LCEvent* event) {
       for (int k = 1; k < tpc_hit; ++k) {
         ced_line_ID((k-1)/4*ap.x, (k-1)/4*ap.y, (k-1)/4*ap.z,
           k/4*ap.x, k/4*ap.y, k/4*ap.z,
-          mc_layer, kLineSize, mc_color, mcp->id());
+          mc_layer, kLineSize, mc_color.hexa(), mcp->id());
       }
       ced_hit_ID((tpc_hit-1)/4*ap.x, (tpc_hit-1)/4*ap.y, (tpc_hit-1)/4*ap.z,
-          kHitMarker, mc_layer, kHitSize, mc_color, mcp->id());
+          kHitMarker, mc_layer, kHitSize, mc_color.hexa(), mcp->id());
       // Draw a cone. Have the cone length depend on the particle momentum.
       float cone_base = 20 + 2 * ap.getP();
-      float cone_height =   25 * ap.getP();
-      float rgba_jet_color[4];
-      viewer_util::fromIntToRGBA(mc_color, rgba_jet_color);
+      float cone_height =  25 * ap.getP();
+      float mc_color_rgba[4];
+      mc_color.setAlpha(0x33);
+      mc_color.update_rgba(mc_color_rgba);
       ced_cone_r_ID(cone_base, cone_height, ref_pt, rotate,
-          mc_layer, rgba_jet_color, mcp->id());
+          mc_layer, mc_color_rgba, mcp->id());
     }
   }
   DDMarlinCED::draw(this, wait_for_keyboard_);
@@ -530,7 +531,7 @@ void DDDSTViewer::showLegendSpectrum(char scale, int color_map,
   ced_legend(en_min, en_max, kColorSteps, rgb_matrix, ticks, scale);
 }
 
-int DDDSTViewer::returnRGBClusterColor(double energy,
+viewer_util::DSTColor DDDSTViewer::returnRGBClusterColor(double energy,
     double cutoff_min, double cutoff_max, char scale, int color_map) {
   if (color_map < 0 || color_map > 6) {
     streamlog_out(ERROR) << "Wrong color_map parameter!" << std::endl;
@@ -541,16 +542,17 @@ int DDDSTViewer::returnRGBClusterColor(double energy,
     kColorSteps, 0, viewer_util::ScaleMapping(scale));
   unsigned int rgb[] = {0, 0, 0};
   ColorMap::selectColorMap(color_map)(rgb, color_delta, 0, kColorSteps);
-  int hex_color = ColorMap::RGB2HEX(rgb[0], rgb[1], rgb[2]);
-  return hex_color;
+  viewer_util::DSTColor color;
+  color.setRGB(rgb[0], rgb[1], rgb[2]);
+  return color;
 }
 
 double DDDSTViewer::returnClusterSize(double en_cluster,
      double cutoff_min, double cutoff_max) {
   // None-zero to ensure visibility of small clusters.
-  int clu_size_min = 10;
+  int clu_size_min =  30; ////10;
   // Not related to the energy scale of the event, but the size of the ECAL.
-  int clu_size_max = 120;
+  int clu_size_max = 300; ////120;
   return viewer_util::convertScales(en_cluster, cutoff_max, cutoff_min,
     clu_size_max, clu_size_min, viewer_util::ScaleMapping(kScale));
 }
@@ -587,66 +589,60 @@ int DDDSTViewer::returnJetLayer(std::string jet_col_name) {
   return layer;
 }
 
-int DDDSTViewer::addTransparencyToColor(int color, int transparency) {
-  return (transparency<<24) + color;
-}
-
-enum TrackColor {
-  kTrackBlack    = 0x999999,
-  kTrackRed      = 0x990000,
-  kTrackOrange   = 0x996600,
-  kTrackYellow   = 0xffff00,
-  kTrackGreen    = 0x00ff00,
-  kTrackDarkBlue = 0x660066,
-  kTrackViolet   = 0x660099,
-  kTrackWhite    = 0x99FFFF,
-};
-
-int DDDSTViewer::returnTrackColor(int particle_type) {
+viewer_util::DSTColor DDDSTViewer::returnTrackColor(int particle_type) {
   switch (particle_type) {
     case   211:  // Pion+.
-      return kTrackRed;
+      return kConeRed;
     case  -211:  // Pion-.
-      return kTrackOrange;
+      return kConeOrange;
     case    22:  // Photon.
-      return kTrackYellow;
+      return kConeYellow;
     case    11:  // Electron.
-      return kTrackDarkBlue;
+      return kConeDarkBlue;
     case   -11:  // Positron.
-      return kTrackViolet;
+      return kConeViolet;
     case    13:  // Muon.
-      return kTrackGreen;
+      return kConeGreen;
     case   -13:  // Anti-muon.
-      return kTrackGreen;
+      return kConeGreen;
     case  2112:  // Neutron.
-      return kTrackWhite;
     case -2112:  // Anti-neutron.
-      return kTrackWhite;
+      return kConeWhite;
     default:
       streamlog_out(DEBUG) << "  Unconsidered particle type " << particle_type
       << ". A default color is chosen." << std::endl;
-      return kTrackBlack;
+      return kConeBlack;
   }
 }
 
-int DDDSTViewer::returnJetColor(int col_number) {
-  int transparency = 0x66;
+viewer_util::DSTColor DDDSTViewer::returnJetColor(int col_number) {
+  ////int transparency = 0x66;
+  viewer_util::DSTColor color;
   switch (col_number) {
   case 0:
-    return addTransparencyToColor(kConeYellow, transparency);
+    color.setHexa(kConeYellow);
+    break;
   case 1:
-    return addTransparencyToColor(kConeRed, transparency);
+    color.setHexa(kConeRed);
+    break;
   case 2:
-    return addTransparencyToColor(kConeWhite, transparency);
+    color.setHexa(kConeWhite);
+    break;
   case 3:
-    return addTransparencyToColor(kConeFuchsia, transparency);
+    color.setHexa(kConeFuchsia);
+    break;
   case 4:
-    return addTransparencyToColor(kConeBlack, transparency);
+    color.setHexa(kConeBlack);
+    break;
   case 5:
-    return addTransparencyToColor(kConeGreen, transparency);
+    color.setHexa(kConeGreen);
+    break;
   default:
-    return addTransparencyToColor(kConeBlue, transparency);
+    color.setHexa(kConeBlue);
+    break;
   }
+  ////color.addAlpha(-transparency);
+  return color;
 }
 
 bool DDDSTViewer::skipUnwantedHiggsDecay(

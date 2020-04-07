@@ -90,17 +90,73 @@ struct AnyParticle {
     return sqrt(x*x + y*y + z*z);
   }
   double getTheta() {
-    return atan(sqrt(x*x + y*y) / z);
+    if (x == 0. && y == 0. && z == 0.) return 0;
+    return atan2(sqrt(x*x + y*y), z);
   }
   double getPhi() {
+    if (x == 0. && y == 0) return 0;
     return atan2(y, x);
   }
 };
 // ----------------------------------------------------------------------------
 // Functionality related to color.
 
-int fromRGBAToInt(float* rgba_color);
-void fromIntToRGBA(int hex_value, float (&rgba)[4]);
+const int kHexPosAlpha = 16*16*16*16*16*16;
+const int kHexPosR     = 16*16*16*16;
+const int kHexPosG     = 16*16;
+const int kHexPosB     = 1;
+const int kByte = 16*16;
+/**
+ *  Utility class for color and conversion between:
+ *    - hex (0x01122): rgb-like.
+ *    - hexa (0x00112233): Including the alpha transparency-channel.
+ *    - rgb ([0,1,2]): Three integers in [0, 255].
+ *    - rgba ([9,1,2,3]) Four integers in [0, 255]. First entry is alpha.
+ *    - rgb_float: Three floats in [0,1).
+ *    - rgba_float: Four floats in [0,1). First entry is alpha.
+ **/
+class DSTColor {
+ private:
+  unsigned int hexa_val = 0x00555555;
+ public:
+  // Constructors.
+  DSTColor() {this->hexa_val = 0x00555555;}
+  DSTColor(int hex_in) {this->hexa_val = hex_in;}
+  // Setters.
+  void setHex(int hex_in) {this->hexa_val = hex_in % kHexPosAlpha;}
+  void setHexa(int hexa_in) {this->hexa_val = hexa_in;}
+  void setRGBFloat(float* rgb);
+  void setRGBFloat(float r, float g, float b);
+  void setRGBAFloat(float* rgba);
+  void setRGBAFloat(float a, float r, float g, float b);
+  void setRGB(unsigned int* rgb);
+  void setRGB(unsigned int r, unsigned int g, unsigned int b);
+  void setRGBA(unsigned int* rgba);
+  void setRGBA(unsigned int a, unsigned int r, unsigned int g, unsigned int b);
+  void setRGB(int* rgb) {setRGB((unsigned int*) rgb);}
+  void setRGB(int r, int g, int b) {setRGB(r, g, b);}
+  void setRGBA(int* rgba) {setRGBA((unsigned int*) rgba);}
+  void setRGBA(int a, int r, int g, int b) {setRGBA(a, r, g, b);}
+  // Getters.
+  unsigned int hex() {return hexa_val % kHexPosAlpha;}
+  unsigned int hexa() {return hexa_val;}
+  void update_rgb(unsigned int* rgb);
+  void update_rgba(unsigned int* rgba);
+  void update_rgb(float* rgb);
+  void update_rgba(float* rgba);
+  // Transparency functionality.
+  void addAlpha(unsigned int alpha) {this->hexa_val += alpha * kHexPosAlpha;}
+  void addAlpha(int alpha) {addAlpha((unsigned int) alpha);}
+  void addAlpha(float alpha) {addAlpha((unsigned int) alpha * kByte);}
+  void setAlpha(unsigned int alpha) {
+    this->hexa_val =  this->hexa_val % kHexPosAlpha + alpha * kHexPosAlpha;
+  }
+  void setAlpha(int alpha) {setAlpha((unsigned int) alpha);}
+  void setAlpha(float alpha) {
+    if (alpha <= 1) alpha *= kByte;
+    setAlpha((unsigned int) alpha);
+    }
+};
 
 enum ScaleMapping {
   kLinear = 'b',

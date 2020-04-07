@@ -205,19 +205,6 @@ double viewer_util::calculateTrackLength(std::string type,
 // ----------------------------------------------------------------------------
 // Functionality related to color.
 
-int viewer_util::fromRGBAToInt(float* rgba_color) {
-  return int(rgba_color[2]*(15*16+15))
-       + int(rgba_color[1]*(15*16+15))*16*16
-       + int(rgba_color[0]*(15*16+15))*16*16*16*16;
-}
-
-void viewer_util::fromIntToRGBA(int hex_value, float (&rgba)[4]) {
-  rgba[0] = ((hex_value >> 24) & 0xFF) / 255.0;  // Extract the transparency.
-  rgba[1] = ((hex_value >> 16) & 0xFF) / 255.0;  // Extract the RR byte.
-  rgba[2] = ((hex_value >> 8)  & 0xFF) / 255.0;  // Extract the GG byte.
-  rgba[3] = ((hex_value)       & 0xFF) / 255.0;  // Extract the BB byte.
-}
-
 // Convert the value laying inside the old scale to a value in a new scale,
 // possibly with a non-linear mapping.
 // Useful e.g. for conversion of an energy value to a color scale.

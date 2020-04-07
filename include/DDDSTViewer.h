@@ -20,6 +20,7 @@
 #include "marlin/Processor.h"
 
 // -- Header for this processor and other project-specific headers.
+#include "viewer_util.h"
 
 class DDDSTViewer : public Processor {
  public:
@@ -46,16 +47,15 @@ class DDDSTViewer : public Processor {
   void writeLayerDescription(void);
   bool skipUnwantedHiggsDecay(IntVec h_decays_to_draw, std::string mc_col_name,
       EVENT::LCEvent* event);
-  int returnTrackColor(int particle_type);
+  viewer_util::DSTColor returnTrackColor(int particle_type);
   void showLegendSpectrum(char scale, int color_map,
       double ene_min, double ene_max, unsigned int ticks);
-  int returnRGBClusterColor(double energy,
+  viewer_util::DSTColor returnRGBClusterColor(double energy,
       double cutoff_min, double cutoff_max, char scale, int color_map);
   double returnClusterSize(double en_cluster,
       double cutoff_min, double cutoff_max);
   int returnJetLayer(std::string jet_col_name);
   int returnIpLayer(std::string jet_col_name);
-  int returnJetColor(int col_number);
-  int addTransparencyToColor(int color, int transparency);
+  viewer_util::DSTColor returnJetColor(int col_number);
 };
 #endif
