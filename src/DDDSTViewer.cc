@@ -168,9 +168,9 @@ DDDSTViewer::DDDSTViewer() : Processor("DDDSTViewer") {
     true);
 
   registerProcessorParameter(
-    "EDrawCut",
-    "Energy threshold to divide between low and high energy drawing.",
-    e_draw_cut_,
+    "PtDrawCut",
+    "Transverse mom. threshold to divide between low and high energy drawing.",
+    pt_draw_cut_,
     (double) 0.0);
 
   IntVec default_h_decays{};  // The default choice is empty -> draw all events.
@@ -197,6 +197,12 @@ DDDSTViewer::DDDSTViewer() : Processor("DDDSTViewer") {
     "of simplified structures.",
     is_drawn_surfaces_,
     false);
+
+  registerProcessorParameter(
+    "HalfConeOpening",
+    "Angle [rad] up to which the cones are drawn.",
+    half_cone_opening_,
+    0.15);
 }
 
 void DDDSTViewer::init() {
@@ -287,7 +293,7 @@ void DDDSTViewer::processEvent(LCEvent* event) {
       int tpc_layer = kTPC;
       int hit_layer = kHit;
       int clu_layer = kCluster;
-      if (ap.E < e_draw_cut_) {
+      if (ap.getPt() < pt_draw_cut_) {
         mom_layer = kMomBelowECut;
         tpc_layer = kTPCBelowECut;
         hit_layer = kHitBelowECut;
@@ -508,10 +514,16 @@ void DDDSTViewer::processEvent(LCEvent* event) {
       ced_hit_ID((tpc_hit-1)/4*ap.x, (tpc_hit-1)/4*ap.y, (tpc_hit-1)/4*ap.z,
           kHitMarker, mc_layer, kHitSize, mc_color.hexa(), mcp->id());
       // Draw a cone. Have the cone length depend on the particle momentum.
-      float cone_base = 20 + 2 * ap.getP();
+      ////float cone_base = 20 + 2 * ap.getP();
+      // Longer cones were considered (to aid seeing which clusters are inside
+      // the cone). At least with the current layer choices, a cone of any
+      // transparency that reaches into the cluster region hides the clusters.
+      // As this counteracts the idea of simplyfication, we stay with short
+      // cones.
       float cone_height =  25 * ap.getP();
+      float cone_base = 2 * tan(half_cone_opening_) * cone_height;
       float mc_color_rgba[4];
-      mc_color.setAlpha(0x33);
+      mc_color.setAlpha(0x30);
       mc_color.update_rgba(mc_color_rgba);
       ced_cone_r_ID(cone_base, cone_height, ref_pt, rotate,
           mc_layer, mc_color_rgba, mcp->id());

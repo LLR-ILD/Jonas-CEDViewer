@@ -36,10 +36,11 @@ class DDDSTViewer : public Processor {
   std::string mc_col_name_{};
   StringVec  jet_col_names_{};
   bool wait_for_keyboard_{};
-  double e_draw_cut_{};
+  double pt_draw_cut_ = -1.;
   IntVec use_h_decays_{};
   StringVec detailled_drawn_detector_surfaces_{};
   bool is_drawn_surfaces_ = false;
+  double half_cone_opening_ = -1.;
   // -- Additional constants.
   int n_run_ = 0;
   int n_event_ = 0;

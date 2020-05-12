@@ -89,6 +89,9 @@ struct AnyParticle {
   double getP() {
     return sqrt(x*x + y*y + z*z);
   }
+  double getPt() {
+    return sqrt(x*x + y*y);
+  }
   double getTheta() {
     if (x == 0. && y == 0. && z == 0.) return 0;
     return atan2(sqrt(x*x + y*y), z);
